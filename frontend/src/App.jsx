@@ -57,12 +57,14 @@ export default function App() {
     amount: '5.00',
   });
 
-  const terminalEndRef = useRef(null);
+  const terminalContainerRef = useRef(null);
+  const prevLogsCountRef = useRef(0);
 
-  // Auto-scroll terminal when new logs arrive
+  // Auto-scroll inside terminal container only when new logs actually arrive
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (terminalContainerRef.current && auditLogs.length > prevLogsCountRef.current) {
+      terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
+      prevLogsCountRef.current = auditLogs.length;
     }
   }, [auditLogs]);
 
@@ -611,7 +613,7 @@ export default function App() {
             </div>
 
             {/* Scrollable Dark Terminal Box */}
-            <div className="flex-1 bg-black/60 rounded-xl p-3.5 font-mono text-xs overflow-y-auto max-h-[340px] space-y-3 border border-gray-900">
+            <div ref={terminalContainerRef} className="flex-1 bg-black/60 rounded-xl p-3.5 font-mono text-xs overflow-y-auto max-h-[340px] space-y-3 border border-gray-900">
               {auditLogs.length === 0 ? (
                 <div className="text-gray-600 italic py-8 text-center">Waiting for incoming agent activities...</div>
               ) : (
@@ -634,7 +636,6 @@ export default function App() {
                   </div>
                 ))
               )}
-              <div ref={terminalEndRef} />
             </div>
           </div>
         </div>
