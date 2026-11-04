@@ -184,33 +184,33 @@ export default function App() {
   const allDeposited = circle && circle.deposits_current_round?.length === circle.members?.length;
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-4 md:p-8 flex flex-col gap-6">
+    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-3 sm:p-6 md:p-8 flex flex-col gap-4 sm:gap-6 w-full max-w-7xl mx-auto overflow-x-hidden">
       {/* ---------------- Header ---------------- */}
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl">
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-[#111827] border border-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Coins className="h-7 w-7 text-white" />
+          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
+            <Coins className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-white">TrustMesh</h1>
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">TrustMesh</h1>
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full font-medium whitespace-nowrap">
                 Agentic Ajo Ledger
               </span>
             </div>
-            <p className="text-sm text-gray-400 mt-0.5">
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5 line-clamp-2 sm:line-clamp-none">
               Cross-Chain Rotating Savings Circle & AI Spend Guard Platform on NEAR Protocol
             </p>
           </div>
         </div>
 
         {/* Tab Switcher & Network Status Pills */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
           {/* Main Navigation Switcher */}
-          <div className="flex items-center bg-gray-900/90 border border-gray-800 p-1 rounded-xl">
+          <div className="flex items-center bg-gray-900/90 border border-gray-800 p-1 rounded-xl w-full sm:w-auto justify-center">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 activeTab === 'dashboard'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md shadow-emerald-500/20'
                   : 'text-gray-400 hover:text-white'
@@ -221,7 +221,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveTab('guide')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 activeTab === 'guide'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md shadow-emerald-500/20'
                   : 'text-gray-400 hover:text-white'
@@ -232,31 +232,33 @@ export default function App() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/80 border border-gray-700/60 text-xs font-mono">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-gray-400">Network:</span>
-            <span className="text-white font-semibold">{health?.nearNetwork || 'NEAR Testnet'}</span>
-          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800/80 border border-gray-700/60 text-[11px] font-mono">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-gray-400">Network:</span>
+              <span className="text-white font-semibold">{health?.nearNetwork || 'testnet'}</span>
+            </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/80 border border-gray-700/60 text-xs font-mono">
-            <Cpu className="h-3.5 w-3.5 text-indigo-400" />
-            <span className="text-gray-400">Agent:</span>
-            <span className={health?.status === 'healthy' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
-              {health?.status === 'healthy' ? 'Connected' : 'Offline'}
-            </span>
-          </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800/80 border border-gray-700/60 text-[11px] font-mono">
+              <Cpu className="h-3 w-3 text-indigo-400" />
+              <span className="text-gray-400">Agent:</span>
+              <span className={health?.status === 'healthy' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                {health?.status === 'healthy' ? 'Connected' : 'Offline'}
+              </span>
+            </div>
 
-          <button
-            onClick={() => {
-              fetchCircleData(selectedCircleId);
-              fetchAuditTrail();
-            }}
-            disabled={loading}
-            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 transition-all hover:text-white"
-            title="Refresh State"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
-          </button>
+            <button
+              onClick={() => {
+                fetchCircleData(selectedCircleId);
+                fetchAuditTrail();
+              }}
+              disabled={loading}
+              className="p-1.5 sm:p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 transition-all hover:text-white"
+              title="Refresh State"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -490,31 +492,31 @@ export default function App() {
               </div>
 
               {/* Metrics Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-3.5">
-                  <span className="text-xs text-gray-400">Current Round</span>
-                  <div className="text-xl font-bold text-white mt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
+                  <span className="text-[11px] sm:text-xs text-gray-400">Current Round</span>
+                  <div className="text-base sm:text-xl font-bold text-white mt-0.5 sm:mt-1">
                     {circle?.current_round ?? 0} <span className="text-xs text-gray-500 font-normal">/ {circle?.total_rounds ?? 3}</span>
                   </div>
                 </div>
 
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-3.5">
-                  <span className="text-xs text-gray-400">Contribution</span>
-                  <div className="text-xl font-bold text-emerald-400 mt-1">
+                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
+                  <span className="text-[11px] sm:text-xs text-gray-400">Contribution</span>
+                  <div className="text-base sm:text-xl font-bold text-emerald-400 mt-0.5 sm:mt-1 truncate">
                     {formatNear(circle?.contribution_amount)} <span className="text-xs font-normal">NEAR</span>
                   </div>
                 </div>
 
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-3.5">
-                  <span className="text-xs text-gray-400">Total Round Pot</span>
-                  <div className="text-xl font-bold text-sky-400 mt-1">
+                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
+                  <span className="text-[11px] sm:text-xs text-gray-400">Total Round Pot</span>
+                  <div className="text-base sm:text-xl font-bold text-sky-400 mt-0.5 sm:mt-1 truncate">
                     {formatNear(circle?.total_round_pot)} <span className="text-xs font-normal">NEAR</span>
                   </div>
                 </div>
 
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-3.5">
-                  <span className="text-xs text-gray-400">Round Deposits</span>
-                  <div className="text-xl font-bold text-white mt-1">
+                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
+                  <span className="text-[11px] sm:text-xs text-gray-400">Round Deposits</span>
+                  <div className="text-base sm:text-xl font-bold text-white mt-0.5 sm:mt-1">
                     {circle?.deposits_current_round?.length ?? 0} <span className="text-xs text-gray-500 font-normal">/ {circle?.members?.length ?? 3}</span>
                   </div>
                 </div>
@@ -557,43 +559,43 @@ export default function App() {
                     const isCandidate = currentCandidate === member;
 
                     return (
-                      <div key={member} className="flex items-center justify-between p-3.5 hover:bg-gray-800/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center justify-center h-6 w-6 rounded-full bg-gray-800 text-xs font-mono font-semibold text-gray-300">
+                      <div key={member} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-3.5 gap-2.5 sm:gap-3 hover:bg-gray-800/30 transition-colors">
+                        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                          <span className="flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-gray-800 text-xs font-mono font-semibold text-gray-300 mt-0.5 sm:mt-0">
                             {turn}
                           </span>
-                          <div>
-                            <div className="font-mono text-sm font-semibold text-white flex items-center gap-2">
-                              {member}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono text-sm font-semibold text-white break-all sm:break-normal">{member}</span>
                               {isCandidate && (
-                                <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-semibold">
-                                  ★ Round {circle.current_round} Winner Candidate
+                                <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-semibold whitespace-nowrap">
+                                  ★ Round {circle.current_round} Candidate
                                 </span>
                               )}
                               {hasWon && (
-                                <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-medium flex items-center gap-1">
+                                <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-medium flex items-center gap-1 whitespace-nowrap">
                                   <Trophy className="h-3 w-3" /> Past Winner
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs text-gray-500">Scheduled for Round #{turn}</span>
+                            <span className="text-[11px] text-gray-500">Scheduled for Round #{turn}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 self-end sm:self-auto pl-8 sm:pl-0 flex-shrink-0">
                           {isPaid ? (
-                            <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs px-2.5 py-1 rounded-md font-medium">
+                            <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs px-2.5 py-1 rounded-md font-medium whitespace-nowrap">
                               <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-1 rounded-md font-medium">
+                            <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-1 rounded-md font-medium whitespace-nowrap">
                               <Clock className="h-3.5 w-3.5" /> Pending
                             </span>
                           )}
 
                           <button
                             onClick={() => handlePreflightGuard(member)}
-                            className="text-[11px] px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 transition"
+                            className="text-[11px] px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 transition whitespace-nowrap active:scale-95"
                             title="Run AI Policy Check on this member"
                           >
                             Check Score
@@ -669,14 +671,14 @@ export default function App() {
                 <button
                   disabled={loading || !allDeposited || circle?.status !== 'Active'}
                   onClick={handleRotate}
-                  className={`w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg ${
+                  className={`w-full py-3 sm:py-3.5 px-3 sm:px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg text-xs sm:text-sm ${
                     allDeposited && circle?.status === 'Active'
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black shadow-emerald-500/25 cursor-pointer'
                       : 'bg-gray-800 text-gray-500 border border-gray-700/60 cursor-not-allowed'
                   }`}
                 >
-                  <Zap className="h-5 w-5" />
-                  <span>
+                  <Zap className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                  <span className="text-center">
                     {allDeposited
                       ? `Trigger Round Rotation (Award Round #${circle?.current_round})`
                       : `Cannot Rotate: Waiting for Deposits (${circle?.deposits_current_round?.length || 0}/${circle?.members?.length || 3})`}
@@ -720,8 +722,8 @@ export default function App() {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-xs text-gray-400">Evaluated Winner Candidate</span>
-                      <div className="font-mono text-sm font-bold text-white">{latestPolicy.winnerAccountId}</div>
+                      <span className="text-[11px] sm:text-xs text-gray-400">Evaluated Winner Candidate</span>
+                      <div className="font-mono text-sm font-bold text-white break-all sm:break-normal">{latestPolicy.winnerAccountId}</div>
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-gray-400">Trust Score</span>
@@ -813,13 +815,13 @@ export default function App() {
                         <span className="text-emerald-400/80 font-semibold">{log.actionTag}</span>
                       </div>
 
-                      <div className="flex items-start gap-1.5 text-sky-300">
-                        <span className="text-sky-500 font-bold select-none">&gt; DO:</span>
+                      <div className="flex items-start gap-1.5 text-sky-300 break-all sm:break-words">
+                        <span className="text-sky-500 font-bold select-none flex-shrink-0">&gt; DO:</span>
                         <span>{log.actionDesc}</span>
                       </div>
 
-                      <div className="flex items-start gap-1.5 text-emerald-300 mt-0.5">
-                        <span className="text-emerald-500 font-bold select-none">&gt; SEE:</span>
+                      <div className="flex items-start gap-1.5 text-emerald-300 mt-0.5 break-all sm:break-words">
+                        <span className="text-emerald-500 font-bold select-none flex-shrink-0">&gt; SEE:</span>
                         <span className="text-emerald-400 font-medium">[{log.resultTag}] {log.resultDesc}</span>
                       </div>
                     </div>
