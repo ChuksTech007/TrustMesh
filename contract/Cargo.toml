@@ -1,0 +1,26 @@
+[package]
+name = "trustmesh-contract"
+version = "0.1.0"
+edition = "2021"
+description = "TrustMesh: Core ledger smart contract for cross-chain agentic Ajo/Esusu rotating savings circles on NEAR Protocol"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { version = "5.7.0", features = ["legacy"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+near-sdk = { version = "5.7.0", features = ["unit-testing"] }
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+

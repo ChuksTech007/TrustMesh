@@ -1,0 +1,32 @@
+{
+  "name": "trustmesh-backend",
+  "version": "1.0.0",
+  "description": "Cross-chain agentic Ajo/Esusu backend service, intent monitor, and AI spend guard for TrustMesh on NEAR",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test-harness.js"
+  },
+  "keywords": [
+    "near",
+    "cross-chain",
+    "ajo",
+    "esusu",
+    "agentic-ai",
+    "web3",
+    "intents"
+  ],
+  "author": "TrustMesh Core Team",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.8",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "express": "^4.21.2",
+    "near-api-js": "^5.0.1"
+  }
+}
+
