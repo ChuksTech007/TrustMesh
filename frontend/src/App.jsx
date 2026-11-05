@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -21,12 +23,24 @@ import {
   ArrowRight,
   Sparkles,
   HelpCircle,
-  ExternalLink
+  TrendingUp,
+  CircleDollarSign,
+  Activity,
+  Plus,
+  X,
+  Copy,
+  ChevronDown,
+  Percent,
+  Sliders,
+  Radio,
+  ExternalLink,
+  ChevronRight,
+  Wallet
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
-// Helper to convert yoctoNEAR to human-readable NEAR
+// Formats yoctoNEAR cleanly into readable NEAR
 function formatNear(yoctoStr) {
   if (!yoctoStr) return '0';
   try {
@@ -42,9 +56,104 @@ function formatNear(yoctoStr) {
   }
 }
 
+// Chain metadata presets with authentic branding
+const CHAINS = {
+  base: {
+    name: 'Base',
+    token: 'USDC',
+    color: 'from-blue-500 to-indigo-600',
+    border: 'border-blue-500/30',
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-400',
+    icon: '🔵'
+  },
+  solana: {
+    name: 'Solana',
+    token: 'SOL',
+    color: 'from-purple-500 to-emerald-400',
+    border: 'border-purple-500/30',
+    bg: 'bg-purple-500/10',
+    text: 'text-purple-400',
+    icon: '🟣'
+  },
+  arbitrum: {
+    name: 'Arbitrum',
+    token: 'USDC',
+    color: 'from-sky-500 to-blue-600',
+    border: 'border-sky-500/30',
+    bg: 'bg-sky-500/10',
+    text: 'text-sky-400',
+    icon: '🔷'
+  },
+  near: {
+    name: 'NEAR Core',
+    token: 'NEAR',
+    color: 'from-emerald-400 to-teal-500',
+    border: 'border-emerald-500/30',
+    bg: 'bg-emerald-500/10',
+    text: 'text-emerald-400',
+    icon: '🟢'
+  }
+};
+
+// Preset Syndicates for the Marketplace Explorer
+const PRESET_SYNDICATES = [
+  {
+    id: 0,
+    title: 'Genesis Multi-Chain Capital Mesh',
+    category: 'Cross-Chain Remittance & Savings',
+    badge: 'Live Interactive Ledger',
+    apy: '8.4%',
+    membersCount: 3,
+    totalCap: '15 NEAR',
+    contribution: '5 NEAR',
+    status: 'Active',
+    chains: ['base', 'solana', 'arbitrum', 'near'],
+    riskRating: 'AAA Prime'
+  },
+  {
+    id: 1,
+    title: 'Decentralized GPU Compute Swarm',
+    category: 'AI Infrastructure Syndicates',
+    badge: 'Yield Generating',
+    apy: '12.1%',
+    membersCount: 6,
+    totalCap: '120 NEAR',
+    contribution: '20 NEAR',
+    status: 'Filling (4/6)',
+    chains: ['base', 'solana', 'near'],
+    riskRating: 'AA+'
+  },
+  {
+    id: 2,
+    title: 'Diaspora West-Africa Credit Union',
+    category: 'Social Impact Finance',
+    badge: 'Zero-Default Insured',
+    apy: '7.8%',
+    membersCount: 10,
+    totalCap: '500 NEAR',
+    contribution: '50 NEAR',
+    status: 'Active',
+    chains: ['base', 'arbitrum', 'near'],
+    riskRating: 'AAA Prime'
+  },
+  {
+    id: 3,
+    title: 'Web3 Builder Micro-Angel Syndicate',
+    category: 'Early Stage Capital Pooling',
+    badge: 'Dynamic Escrow',
+    apy: '14.5%',
+    membersCount: 5,
+    totalCap: '250 NEAR',
+    contribution: '50 NEAR',
+    status: 'Upcoming',
+    chains: ['solana', 'near'],
+    riskRating: 'A+'
+  }
+];
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'guide'
-  const [health, setHealth] = useState(null);
+  const [activeTab, setActiveTab] = useState('hub'); // 'hub' | 'explorer' | 'risk' | 'architecture'
   const [circle, setCircle] = useState(null);
   const [circlesList, setCirclesList] = useState([]);
   const [selectedCircleId, setSelectedCircleId] = useState(0);
@@ -53,11 +162,32 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Simulated live DeFi yield accumulator ticking up in real time
+  const [accruedYield, setAccruedYield] = useState(0.0421);
+
+  // New Syndicate Form State
+  const [newSyndicate, setNewSyndicate] = useState({
+    title: '',
+    contribution: '10',
+    totalRounds: 4,
+    category: 'Developer Compute Swarm'
+  });
 
   const terminalContainerRef = useRef(null);
   const prevLogsCountRef = useRef(0);
 
-  // Auto-scroll inside terminal container only when new logs actually arrive
+  // Live yield increment ticker simulation
+  useEffect(() => {
+    const yieldInterval = setInterval(() => {
+      setAccruedYield(prev => +(prev + 0.00015).toFixed(5));
+    }, 2500);
+    return () => clearInterval(yieldInterval);
+  }, []);
+
+  // Auto-scroll terminal when new events arrive
   useEffect(() => {
     if (terminalContainerRef.current && auditLogs.length > prevLogsCountRef.current) {
       terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
@@ -65,40 +195,28 @@ export default function App() {
     }
   }, [auditLogs]);
 
-  // Initial fetch and 3-second auto-polling loop
+  // Initial data fetch & polling
   useEffect(() => {
-    fetchHealth();
     fetchCircleData(selectedCircleId);
     fetchAuditTrail();
 
     const interval = setInterval(() => {
       fetchCircleData(selectedCircleId, true);
       fetchAuditTrail();
-      fetchHealth();
     }, 3000);
 
     return () => clearInterval(interval);
   }, [selectedCircleId]);
-
-  const fetchHealth = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/health`);
-      setHealth(res.data);
-    } catch {
-      setHealth({ status: 'offline' });
-    }
-  };
 
   const fetchCircleData = async (id, isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
       const res = await axios.get(`${API_BASE}/api/circle/${id}`);
       setCircle(res.data);
-
       const listRes = await axios.get(`${API_BASE}/api/circles`);
       setCirclesList(listRes.data || []);
     } catch (err) {
-      console.error('Failed to fetch circle:', err);
+      console.error('Fetch circle error:', err);
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -109,7 +227,7 @@ export default function App() {
       const res = await axios.get(`${API_BASE}/api/agent/audit-trail`);
       setAuditLogs(res.data.events || []);
     } catch (err) {
-      console.error('Failed to fetch audit trail:', err);
+      console.error('Fetch audit trail error:', err);
     }
   };
 
@@ -125,24 +243,24 @@ export default function App() {
         source_chain: chain,
         source_token: token,
         amount: amount,
-        source_tx_hash: `0x${Math.random().toString(16).substring(2, 10)}...${chain}_tx`,
+        source_tx_hash: `0x${Math.random().toString(16).substring(2, 10)}...${chain}_intent`,
         target_circle_id: selectedCircleId,
         member_account_id: memberAccountId,
       };
 
       await axios.post(`${API_BASE}/api/webhook/cross-chain-deposit`, payload);
-      setActionMessage(`Deposit confirmed on NEAR ledger for ${memberAccountId}! (${amount} ${token} on ${chain.toUpperCase()})`);
+      setActionMessage(`Cross-Chain Intent Verified: ${amount} ${token} (${chain.toUpperCase()}) credited to ${memberAccountId} on NEAR!`);
       await fetchCircleData(selectedCircleId);
       await fetchAuditTrail();
     } catch (err) {
       const msg = err.response?.data?.error || err.message;
-      setActionError(`Deposit Failed: ${msg}`);
+      setActionError(`Deposit Ingestion Error: ${msg}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Round rotation trigger
+  // Round rotation trigger with Confetti celebration
   const handleRotate = async () => {
     setActionMessage(null);
     setActionError(null);
@@ -150,31 +268,47 @@ export default function App() {
 
     try {
       const res = await axios.post(`${API_BASE}/api/circle/rotate`, { circle_id: selectedCircleId });
-      setActionMessage(`Round Rotated Successfully! Winner awarded: ${res.data.winner}`);
+      setActionMessage(`Rotation Finalized! Winner Awarded: ${res.data.winner}`);
       if (res.data.policyResult) {
         setLatestPolicy(res.data.policyResult);
       }
+
+      // Trigger festive confetti
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#00EC97', '#6366F1', '#38BDF8']
+      });
+
       await fetchCircleData(selectedCircleId);
       await fetchAuditTrail();
     } catch (err) {
       const msg = err.response?.data?.error || err.message;
-      setActionError(`Rotation Failed: ${msg}`);
+      setActionError(`Rotation Blocked: ${msg}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Pre-flight policy evaluation
+  // Pre-flight AI policy test
   const handlePreflightGuard = async (memberAccountId) => {
     setActionMessage(null);
     setActionError(null);
     try {
       const res = await axios.get(`${API_BASE}/api/circle/${selectedCircleId}/guard/${memberAccountId}`);
       setLatestPolicy(res.data);
-      setActionMessage(`Policy pre-flight evaluated for ${memberAccountId}`);
+      setActionMessage(`AI Policy evaluated for ${memberAccountId}`);
+      setActiveTab('risk');
     } catch (err) {
-      setActionError(`Policy check failed: ${err.message}`);
+      setActionError(`Policy evaluation failed: ${err.message}`);
     }
+  };
+
+  const handleCreateSyndicate = (e) => {
+    e.preventDefault();
+    setIsCreateModalOpen(false);
+    setActionMessage(`Syndicate "${newSyndicate.title || 'Custom Mesh'}" initialized on NEAR Ledger!`);
   };
 
   const currentCandidate = circle && circle.current_round > 0 && circle.members
@@ -184,654 +318,857 @@ export default function App() {
   const allDeposited = circle && circle.deposits_current_round?.length === circle.members?.length;
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-3 sm:p-6 md:p-8 flex flex-col gap-4 sm:gap-6 w-full max-w-7xl mx-auto overflow-x-hidden">
-      {/* ---------------- Header ---------------- */}
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-[#111827] border border-gray-800 rounded-2xl p-4 sm:p-6 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
-            <Coins className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">TrustMesh</h1>
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                Agentic Ajo Ledger
-              </span>
+    <div className="min-h-screen bg-radial-mesh text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* ---------------- Top Protocol Navigation Bar ---------------- */}
+      <nav className="sticky top-0 z-50 glass-panel border-b border-white/[0.08] px-4 lg:px-8 py-3.5 flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div className="flex items-center justify-between w-full lg:w-auto">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Zap className="h-5 w-5 text-black font-black" />
             </div>
-            <p className="text-xs sm:text-sm text-gray-400 mt-0.5 line-clamp-2 sm:line-clamp-none">
-              Cross-Chain Rotating Savings Circle & AI Spend Guard Platform on NEAR Protocol
-            </p>
-          </div>
-        </div>
-
-        {/* Tab Switcher & Network Status Pills */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
-          {/* Main Navigation Switcher */}
-          <div className="flex items-center bg-gray-900/90 border border-gray-800 p-1 rounded-xl w-full sm:w-auto justify-center">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'dashboard'
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md shadow-emerald-500/20'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span>Live Ledger</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('guide')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'guide'
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md shadow-emerald-500/20'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span>How It Works & Guide</span>
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800/80 border border-gray-700/60 text-[11px] font-mono">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-gray-400">Network:</span>
-              <span className="text-white font-semibold">{health?.nearNetwork || 'testnet'}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-extrabold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-emerald-400">
+                  TrustMesh
+                </span>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  v2.0 Protocol
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Autonomous Cross-Chain Capital Meshes & AI Spend Guard
+              </p>
             </div>
-
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800/80 border border-gray-700/60 text-[11px] font-mono">
-              <Cpu className="h-3 w-3 text-indigo-400" />
-              <span className="text-gray-400">Agent:</span>
-              <span className={health?.status === 'healthy' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
-                {health?.status === 'healthy' ? 'Connected' : 'Offline'}
-              </span>
-            </div>
-
-            <button
-              onClick={() => {
-                fetchCircleData(selectedCircleId);
-                fetchAuditTrail();
-              }}
-              disabled={loading}
-              className="p-1.5 sm:p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 transition-all hover:text-white"
-              title="Refresh State"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
-            </button>
           </div>
-        </div>
-      </header>
 
-      {/* ---------------- Notifications & Alerts ---------------- */}
-      {actionMessage && (
-        <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0" />
-            <span>{actionMessage}</span>
-          </div>
-          <button onClick={() => setActionMessage(null)} className="text-emerald-400 hover:text-emerald-200 text-xs underline">
-            Dismiss
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs"
+          >
+            <Plus className="h-4 w-4" /> New Mesh
           </button>
         </div>
-      )}
 
-      {actionError && (
-        <div className="flex items-center justify-between p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-            <span>{actionError}</span>
-          </div>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-200 text-xs underline">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* ---------------- VIEW 1: HOW IT WORKS & OPERATOR GUIDE ---------------- */}
-      {activeTab === 'guide' && (
-        <div className="flex flex-col gap-8 animate-fadeIn">
-          {/* Hero Banner */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-emerald-950/40 via-indigo-950/40 to-slate-900 border border-emerald-500/20 rounded-3xl p-8 md:p-10 shadow-2xl">
-            <div className="max-w-3xl flex flex-col gap-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold w-fit">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>The Grassroots Social Finance Revolution</span>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
-                What is an Ajo / Esusu, and how does TrustMesh solve its biggest flaws?
-              </h2>
-              <p className="text-gray-300 text-base leading-relaxed">
-                Over <strong className="text-white">1 billion people</strong> across Africa (Ajo/Esusu), Latin America (Tandas), and Asia (Chit Funds) rely on community rotating savings clubs. Friends pool money together to receive lump sums without predatory bank loans.
-              </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-bold text-sm hover:from-emerald-400 hover:to-teal-400 transition shadow-lg shadow-emerald-500/25"
-                >
-                  <span>Launch Live Interactive Dashboard</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* How Traditional Ajo Works */}
-          <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">How Rotating Savings Circles Work (The Mental Model)</h3>
-                <p className="text-xs text-gray-400">Imagine 3 friends: Alice, Bob, and Charlie agree to save 5 NEAR each round (15 NEAR Pot):</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-gray-800/40 border border-gray-700/60 rounded-xl p-5 flex flex-col gap-2 relative">
-                <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">Round 1</span>
-                <h4 className="text-lg font-bold text-white">Alice Takes the Pot</h4>
-                <p className="text-xs text-gray-400">Alice, Bob, and Charlie each deposit 5 NEAR. Alice collects the lump sum of 15 NEAR.</p>
-                <div className="mt-2 text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-2 rounded">
-                  Winner: alice.near (15 NEAR)
-                </div>
-              </div>
-
-              <div className="bg-gray-800/40 border border-gray-700/60 rounded-xl p-5 flex flex-col gap-2 relative">
-                <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider">Round 2</span>
-                <h4 className="text-lg font-bold text-white">Bob Takes the Pot</h4>
-                <p className="text-xs text-gray-400">Everyone deposits 5 NEAR again. Bob collects the lump sum of 15 NEAR.</p>
-                <div className="mt-2 text-xs font-mono bg-sky-500/10 border border-sky-500/20 text-sky-300 p-2 rounded">
-                  Winner: bob.near (15 NEAR)
-                </div>
-              </div>
-
-              <div className="bg-gray-800/40 border border-gray-700/60 rounded-xl p-5 flex flex-col gap-2 relative">
-                <span className="text-xs font-mono font-bold text-purple-400 uppercase tracking-wider">Round 3</span>
-                <h4 className="text-lg font-bold text-white">Charlie Takes the Pot</h4>
-                <p className="text-xs text-gray-400">Everyone deposits 5 NEAR again. Charlie collects the lump sum of 15 NEAR. Circle completes!</p>
-                <div className="mt-2 text-xs font-mono bg-purple-500/10 border border-purple-500/20 text-purple-300 p-2 rounded">
-                  Winner: charlie.near (15 NEAR)
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* The 2 Breakthroughs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  <Globe className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-white">1. Cross-Chain Freedom (NEAR Intents)</h3>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed">
-                In traditional circles, international members cannot save together due to cross-border banking fees and fragmented crypto chains.
-              </p>
-              <div className="p-3 bg-black/30 rounded-xl border border-gray-800 text-xs font-mono text-gray-300 flex flex-col gap-1.5">
-                <div className="text-emerald-400 font-semibold">• Alice pays USDC on Base</div>
-                <div className="text-purple-400 font-semibold">• Bob pays SOL on Solana</div>
-                <div className="text-sky-400 font-semibold">• Charlie pays USDC on Arbitrum</div>
-              </div>
-              <p className="text-xs text-gray-400">
-                NEAR acts as the universal clearinghouse. Users never have to manually bridge tokens; our intent monitor verifies proofs and credits the circle natively on NEAR.
-              </p>
-            </div>
-
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                  <ShieldAlert className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold text-white">2. AI Spend Guard (Solving Default Risk)</h3>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed">
-                The centuries-old flaw of Ajo is the <strong>"Free-Rider Problem"</strong>: what if Bob wins the pot in Round 2, takes the 15 NEAR, and vanishes before paying in Round 3?
-              </p>
-              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs text-amber-300 flex flex-col gap-1">
-                <span className="font-bold">Autonomous Policy Enforcement:</span>
-                <span>• Trust Score &ge; 65 $\rightarrow$ 100% direct release.</span>
-                <span>• Trust Score &lt; 65 $\rightarrow$ 35% withheld in Escrow Vault (<code className="text-white">escrow.trustmesh.testnet</code>) until subsequent round obligations are met!</span>
-              </div>
-              <p className="text-xs text-gray-400">
-                Zero over-collateralization needed. Community trust is guarded autonomously by agent policy intelligence.
-              </p>
-            </div>
-          </div>
-
-          {/* Step-by-Step Operator Instructions */}
-          <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 md:p-8 shadow-xl flex flex-col gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400">
-                <HelpCircle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">How to Test the Live Dashboard (Step-by-Step)</h3>
-                <p className="text-xs text-gray-400">Follow these 4 steps in the Live Ledger to witness the full lifecycle:</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-gray-800/30 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">1</span>
-                  <span className="text-sm font-bold text-white">Check Scores</span>
-                </div>
-                <p className="text-xs text-gray-400">Click <strong>"Check Score"</strong> next to Alice (Score: 95, Approved) vs Bob (Score: 45, Escrow Protected).</p>
-              </div>
-
-              <div className="bg-gray-800/30 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">2</span>
-                  <span className="text-sm font-bold text-white">Deposit Assets</span>
-                </div>
-                <p className="text-xs text-gray-400">Click the 3 deposit buttons: <strong>Alice (Base)</strong>, <strong>Bob (Solana)</strong>, and <strong>Charlie (Arbitrum)</strong>.</p>
-              </div>
-
-              <div className="bg-gray-800/30 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">3</span>
-                  <span className="text-sm font-bold text-white">Rotate Round #1</span>
-                </div>
-                <p className="text-xs text-gray-400">Once 3/3 deposits are in, click <strong>"Trigger Round Rotation"</strong>. Alice wins the pot and Round 2 begins!</p>
-              </div>
-
-              <div className="bg-gray-800/30 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">4</span>
-                  <span className="text-sm font-bold text-white">Watch Escrow</span>
-                </div>
-                <p className="text-xs text-gray-400">Deposit again for Round 2, rotate for Bob $\rightarrow$ watch the AI Guard automatically withhold 35% in escrow!</p>
-              </div>
-            </div>
-
-            <div className="pt-2 text-center">
+        {/* Center Tab Navigation */}
+        <div className="flex items-center bg-slate-900/80 border border-white/10 p-1 rounded-2xl w-full lg:w-auto overflow-x-auto">
+          {[
+            { id: 'hub', label: 'Command Hub', icon: Activity },
+            { id: 'explorer', label: 'Syndicate Explorer', icon: Globe },
+            { id: 'risk', label: 'AI Risk Studio', icon: ShieldCheck },
+            { id: 'architecture', label: 'Architecture & Docs', icon: BookOpen }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                onClick={() => setActiveTab('dashboard')}
-                className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-bold text-sm hover:from-emerald-400 hover:to-teal-400 transition shadow-lg shadow-emerald-500/25"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  isActive ? 'text-black font-bold' : 'text-slate-400 hover:text-white'
+                }`}
               >
-                Go to Live Ledger Dashboard
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTabBadge"
+                    className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-xl shadow-md shadow-emerald-500/20"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </span>
               </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
 
-      {/* ---------------- VIEW 2: LIVE LEDGER DASHBOARD ---------------- */}
-      {activeTab === 'dashboard' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
-          {/* Left Column: Circle Details & Action Controls */}
-          <div className="lg:col-span-7 flex flex-col gap-6">
-            {/* Circle Overview Card */}
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-5">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                    <Layers className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Circle #{circle?.id ?? 0} Overview</h2>
-                    <p className="text-xs text-gray-400">{circle?.metadata || 'Standard Multi-Chain Rotating Savings'}</p>
-                  </div>
-                </div>
-
-                {circle && (
-                  <span
-                    className={`text-xs px-3 py-1 rounded-full font-semibold border ${
-                      circle.status === 'Active'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : circle.status === 'Completed'
-                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-                        : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                    }`}
-                  >
-                    ● {circle.status}
-                  </span>
-                )}
-              </div>
-
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
-                  <span className="text-[11px] sm:text-xs text-gray-400">Current Round</span>
-                  <div className="text-base sm:text-xl font-bold text-white mt-0.5 sm:mt-1">
-                    {circle?.current_round ?? 0} <span className="text-xs text-gray-500 font-normal">/ {circle?.total_rounds ?? 3}</span>
-                  </div>
-                </div>
-
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
-                  <span className="text-[11px] sm:text-xs text-gray-400">Contribution</span>
-                  <div className="text-base sm:text-xl font-bold text-emerald-400 mt-0.5 sm:mt-1 truncate">
-                    {formatNear(circle?.contribution_amount)} <span className="text-xs font-normal">NEAR</span>
-                  </div>
-                </div>
-
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
-                  <span className="text-[11px] sm:text-xs text-gray-400">Total Round Pot</span>
-                  <div className="text-base sm:text-xl font-bold text-sky-400 mt-0.5 sm:mt-1 truncate">
-                    {formatNear(circle?.total_round_pot)} <span className="text-xs font-normal">NEAR</span>
-                  </div>
-                </div>
-
-                <div className="bg-gray-800/40 border border-gray-800 rounded-xl p-2.5 sm:p-3.5">
-                  <span className="text-[11px] sm:text-xs text-gray-400">Round Deposits</span>
-                  <div className="text-base sm:text-xl font-bold text-white mt-0.5 sm:mt-1">
-                    {circle?.deposits_current_round?.length ?? 0} <span className="text-xs text-gray-500 font-normal">/ {circle?.members?.length ?? 3}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Round Progress Bar */}
-              <div>
-                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-                  <span>Current Round Deposit Completion</span>
-                  <span className="font-semibold text-white">
-                    {circle?.members?.length
-                      ? Math.round(((circle.deposits_current_round?.length || 0) / circle.members.length) * 100)
-                      : 0}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-emerald-500 to-sky-500 h-2.5 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${
-                        circle?.members?.length
-                          ? ((circle.deposits_current_round?.length || 0) / circle.members.length) * 100
-                          : 0
-                      }%`,
-                    }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* Registered Members Table */}
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
-                  Circle Members & Turn Order
-                </h3>
-                <div className="divide-y divide-gray-800 border border-gray-800 rounded-xl overflow-hidden bg-gray-900/50">
-                  {circle?.members?.map((member, idx) => {
-                    const turn = idx + 1;
-                    const isPaid = circle.deposits_current_round?.includes(member);
-                    const hasWon = circle.past_winners?.includes(member);
-                    const isCandidate = currentCandidate === member;
-
-                    return (
-                      <div key={member} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-3.5 gap-2.5 sm:gap-3 hover:bg-gray-800/30 transition-colors">
-                        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-                          <span className="flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-gray-800 text-xs font-mono font-semibold text-gray-300 mt-0.5 sm:mt-0">
-                            {turn}
-                          </span>
-                          <div className="flex flex-col gap-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-sm font-semibold text-white break-all sm:break-normal">{member}</span>
-                              {isCandidate && (
-                                <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-semibold whitespace-nowrap">
-                                  ★ Round {circle.current_round} Candidate
-                                </span>
-                              )}
-                              {hasWon && (
-                                <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] px-2 py-0.5 rounded-full font-sans font-medium flex items-center gap-1 whitespace-nowrap">
-                                  <Trophy className="h-3 w-3" /> Past Winner
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-gray-500">Scheduled for Round #{turn}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-end sm:self-auto pl-8 sm:pl-0 flex-shrink-0">
-                          {isPaid ? (
-                            <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs px-2.5 py-1 rounded-md font-medium whitespace-nowrap">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Paid
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-1 rounded-md font-medium whitespace-nowrap">
-                              <Clock className="h-3.5 w-3.5" /> Pending
-                            </span>
-                          )}
-
-                          <button
-                            onClick={() => handlePreflightGuard(member)}
-                            className="text-[11px] px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 transition whitespace-nowrap active:scale-95"
-                            title="Run AI Policy Check on this member"
-                          >
-                            Check Score
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Action Controls Panel */}
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    <ArrowRightLeft className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white">Mock Action Controls Panel</h2>
-                    <p className="text-xs text-gray-400">Simulate cross-chain intent webhooks & execute round progression</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Deposit Buttons */}
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2">
-                  Simulate Cross-Chain Intent Deposits
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <button
-                    disabled={loading || circle?.deposits_current_round?.includes('alice.near')}
-                    onClick={() => handleDeposit('alice.near', 'base', 'USDC', '5.00')}
-                    className="flex flex-col items-start p-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/80 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Alice</span>
-                      <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-mono">Base</span>
-                    </div>
-                    <span className="text-xs text-gray-400 mt-1 font-mono">5.00 USDC</span>
-                  </button>
-
-                  <button
-                    disabled={loading || circle?.deposits_current_round?.includes('bob.near')}
-                    onClick={() => handleDeposit('bob.near', 'solana', 'SOL', '0.035')}
-                    className="flex flex-col items-start p-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/80 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Bob</span>
-                      <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-mono">Solana</span>
-                    </div>
-                    <span className="text-xs text-gray-400 mt-1 font-mono">0.035 SOL</span>
-                  </button>
-
-                  <button
-                    disabled={loading || circle?.deposits_current_round?.includes('charlie.near')}
-                    onClick={() => handleDeposit('charlie.near', 'arbitrum', 'USDC', '5.00')}
-                    className="flex flex-col items-start p-3 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/80 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition">Charlie</span>
-                      <span className="text-[10px] bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded font-mono">Arbitrum</span>
-                    </div>
-                    <span className="text-xs text-gray-400 mt-1 font-mono">5.00 USDC</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Rotate Button */}
-              <div className="pt-2 border-t border-gray-800">
-                <button
-                  disabled={loading || !allDeposited || circle?.status !== 'Active'}
-                  onClick={handleRotate}
-                  className={`w-full py-3 sm:py-3.5 px-3 sm:px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg text-xs sm:text-sm ${
-                    allDeposited && circle?.status === 'Active'
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black shadow-emerald-500/25 cursor-pointer'
-                      : 'bg-gray-800 text-gray-500 border border-gray-700/60 cursor-not-allowed'
-                  }`}
-                >
-                  <Zap className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                  <span className="text-center">
-                    {allDeposited
-                      ? `Trigger Round Rotation (Award Round #${circle?.current_round})`
-                      : `Cannot Rotate: Waiting for Deposits (${circle?.deposits_current_round?.length || 0}/${circle?.members?.length || 3})`}
-                  </span>
-                </button>
-                {!allDeposited && (
-                  <p className="text-[11px] text-gray-500 text-center mt-2">
-                    All circle members must complete verified multi-chain deposits before the contract ledger permits rotation.
-                  </p>
-                )}
-              </div>
-            </div>
+        {/* Right Status Pill & CTA */}
+        <div className="hidden lg:flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-white/10 text-xs font-mono">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="text-slate-400">NEAR MPC:</span>
+            <span className="text-emerald-400 font-bold">Active</span>
           </div>
 
-          {/* Right Column: AI Policy Guard & Terminal Audit Trail */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
-            {/* AI Security Guard Log Panel */}
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white">AI Security Guard</h2>
-                    <p className="text-xs text-gray-400">TrustMesh Policy & Sybil Risk Engine</p>
-                  </div>
-                </div>
-                <span className="text-[10px] bg-sky-500/10 text-sky-400 px-2.5 py-1 rounded-full border border-sky-500/30 font-mono">
-                  Threshold: 65/100
-                </span>
-              </div>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-black font-extrabold text-xs transition shadow-lg shadow-emerald-500/20"
+          >
+            <Plus className="h-4 w-4" /> Create Capital Mesh
+          </button>
+        </div>
+      </nav>
 
-              {latestPolicy ? (
-                <div
-                  className={`p-4 rounded-xl border flex flex-col gap-3 transition-all ${
-                    latestPolicy.policyStatus === 'GUARD_PASSED_FULL_RELEASE'
-                      ? 'bg-emerald-500/5 border-emerald-500/30'
-                      : 'bg-amber-500/5 border-amber-500/30'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[11px] sm:text-xs text-gray-400">Evaluated Winner Candidate</span>
-                      <div className="font-mono text-sm font-bold text-white break-all sm:break-normal">{latestPolicy.winnerAccountId}</div>
+      {/* ---------------- Live Protocol Ticker Bar ---------------- */}
+      <div className="border-b border-white/[0.06] bg-slate-950/40 px-4 lg:px-8 py-2 flex items-center justify-between text-[11px] font-mono text-slate-400 overflow-x-auto gap-6">
+        <div className="flex items-center gap-6 whitespace-nowrap">
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-500">SIMULATED VOLUME:</span>
+            <span className="text-white font-bold">$14.28M</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-500">SETTLEMENT ENGINE:</span>
+            <span className="text-emerald-400 font-semibold">NEAR Intents (1Click API)</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-500">ACCRUED DEFI APY:</span>
+            <span className="text-teal-400 font-bold">+{accruedYield} NEAR</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-500">SWARM RISK STATUS:</span>
+            <span className="text-emerald-400 font-bold">0.00% Default Rate</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+          <span>Ledger Contract: <strong className="text-slate-200">trustmesh.testnet</strong></span>
+        </div>
+      </div>
+
+      {/* ---------------- Dynamic Toast Banner ---------------- */}
+      <AnimatePresence>
+        {actionMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mx-4 lg:mx-8 mt-4 p-4 rounded-2xl glass-panel border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-between gap-3 shadow-xl"
+          >
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+              <span className="font-medium">{actionMessage}</span>
+            </div>
+            <button onClick={() => setActionMessage(null)} className="text-slate-400 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+
+        {actionError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mx-4 lg:mx-8 mt-4 p-4 rounded-2xl glass-panel border border-red-500/40 text-red-300 text-xs flex items-center justify-between gap-3 shadow-xl"
+          >
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
+              <span className="font-medium">{actionError}</span>
+            </div>
+            <button onClick={() => setActionError(null)} className="text-slate-400 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---------------- Main Content Views ---------------- */}
+      <main className="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
+        {/* ========================================================================= */}
+        {/* VIEW 1: COMMAND HUB (INTERACTIVE ROTATING CAPITAL MESH) */}
+        {/* ========================================================================= */}
+        {activeTab === 'hub' && (
+          <div className="flex flex-col gap-8">
+            {/* Hero Summary Card */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Interactive Orbital Mesh Visualization (7 cols) */}
+              <div className="lg:col-span-7 glass-panel rounded-3xl p-6 lg:p-8 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex items-start justify-between relative z-10">
+                  <div>
+                    <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+                      Autonomous Capital Mesh #{circle?.id ?? 0}
+                    </span>
+                    <h2 className="text-2xl font-black text-white mt-1">
+                      {circle?.metadata || 'Genesis Cross-Chain Savings Circle'}
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md">
+                      Rotational multi-chain syndicate settling into NEAR. Pooled capital generates yield until cycle rotation.
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+                    ● {circle?.status || 'Active'}
+                  </span>
+                </div>
+
+                {/* Animated Visual Orbital Mesh Core */}
+                <div className="py-10 flex flex-col items-center justify-center relative my-4">
+                  {/* Outer Orbit Ring */}
+                  <div className="w-64 h-64 sm:w-72 sm:h-72 rounded-full border border-dashed border-emerald-500/20 relative flex items-center justify-center animate-spin-slow">
+                    {/* Member Node 1 (Alice - Base) */}
+                    <div className="absolute -top-3.5 bg-slate-900 border border-blue-500/40 p-2 rounded-2xl shadow-lg flex items-center gap-2 transform hover:scale-105 transition">
+                      <span className="text-xs">🔵</span>
+                      <div className="text-left">
+                        <div className="text-[10px] font-mono font-bold text-white">alice.near</div>
+                        <div className="text-[9px] text-blue-400 font-mono">Base (5 USDC)</div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs text-gray-400">Trust Score</span>
-                      <div
-                        className={`text-lg font-bold font-mono ${
-                          latestPolicy.trustScore >= 65 ? 'text-emerald-400' : 'text-amber-400'
-                        }`}
-                      >
-                        {latestPolicy.trustScore} / 100
+
+                    {/* Member Node 2 (Bob - Solana) */}
+                    <div className="absolute -bottom-3.5 right-6 bg-slate-900 border border-purple-500/40 p-2 rounded-2xl shadow-lg flex items-center gap-2 transform hover:scale-105 transition">
+                      <span className="text-xs">🟣</span>
+                      <div className="text-left">
+                        <div className="text-[10px] font-mono font-bold text-white">bob.near</div>
+                        <div className="text-[9px] text-purple-400 font-mono">Solana (0.035 SOL)</div>
+                      </div>
+                    </div>
+
+                    {/* Member Node 3 (Charlie - Arbitrum) */}
+                    <div className="absolute -bottom-3.5 left-6 bg-slate-900 border border-sky-500/40 p-2 rounded-2xl shadow-lg flex items-center gap-2 transform hover:scale-105 transition">
+                      <span className="text-xs">🔷</span>
+                      <div className="text-left">
+                        <div className="text-[10px] font-mono font-bold text-white">charlie.near</div>
+                        <div className="text-[9px] text-sky-400 font-mono">Arbitrum (5 USDC)</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {latestPolicy.policyStatus === 'GUARD_PASSED_FULL_RELEASE' ? (
-                      <ShieldCheck className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                    ) : (
-                      <ShieldAlert className="h-4 w-4 text-amber-400 flex-shrink-0" />
-                    )}
-                    <span
-                      className={`text-xs font-semibold ${
-                        latestPolicy.policyStatus === 'GUARD_PASSED_FULL_RELEASE' ? 'text-emerald-400' : 'text-amber-400'
-                      }`}
-                    >
-                      {latestPolicy.policyStatus === 'GUARD_PASSED_FULL_RELEASE'
-                        ? 'Approved: Full Direct Payout Release'
-                        : 'Protection Enforced: Escrow Sub-Account Routing'}
+                  {/* Central Pot Core */}
+                  <div className="absolute flex flex-col items-center justify-center p-6 rounded-full bg-gradient-to-tr from-slate-900 via-slate-800 to-slate-900 border border-emerald-400/40 shadow-2xl glow-emerald">
+                    <Coins className="h-6 w-6 text-emerald-400 animate-bounce" />
+                    <span className="text-[10px] text-slate-400 font-mono mt-1">ROUND POT</span>
+                    <span className="text-xl font-extrabold text-white font-mono">
+                      {formatNear(circle?.total_round_pot)} NEAR
+                    </span>
+                    <span className="text-[9px] text-teal-400 font-mono font-semibold">
+                      +{accruedYield} NEAR Yield
                     </span>
                   </div>
+                </div>
 
-                  <p className="text-xs text-gray-300 leading-relaxed bg-black/20 p-2.5 rounded-lg border border-gray-800">
-                    {latestPolicy.reason}
-                  </p>
-
-                  {latestPolicy.escrowWithholdingPercent > 0 && (
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-800">
-                      <div className="bg-gray-800/40 p-2 rounded">
-                        <span className="text-gray-400 block text-[10px]">Direct Payout (65%)</span>
-                        <span className="text-white font-mono font-semibold">
-                          {formatNear(latestPolicy.directPayoutAmount)} NEAR
-                        </span>
-                      </div>
-                      <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded">
-                        <span className="text-amber-400 block text-[10px]">Withheld in Escrow (35%)</span>
-                        <span className="text-amber-300 font-mono font-semibold">
-                          {formatNear(latestPolicy.escrowWithheldAmount)} NEAR
-                        </span>
-                      </div>
+                {/* Key Metrics Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10 pt-4 border-t border-white/[0.08]">
+                  <div className="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono text-slate-400">ACTIVE ROUND</span>
+                    <div className="text-lg font-bold text-white mt-0.5">
+                      {circle?.current_round ?? 0} <span className="text-xs text-slate-500">/ {circle?.total_rounds ?? 3}</span>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-6 rounded-xl border border-gray-800 bg-gray-900/30 text-center">
-                  <Lock className="h-8 w-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-xs text-gray-400">
-                    The AI Security Guard evaluates reputation metrics prior to payout release.
-                  </p>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Click <span className="text-gray-300 font-mono font-medium">"Check Score"</span> on any member above or rotate a round to view live risk analysis.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Terminal Audit Trail Viewer */}
-            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 flex-1 min-h-[380px]">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 mr-2">
-                    <div className="h-3 w-3 rounded-full bg-red-500/80"></div>
-                    <div className="h-3 w-3 rounded-full bg-yellow-500/80"></div>
-                    <div className="h-3 w-3 rounded-full bg-green-500/80"></div>
                   </div>
-                  <Terminal className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-xs font-bold text-white tracking-wide uppercase font-mono">Agent Audit Trail</h3>
+
+                  <div className="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono text-slate-400">ROUND CONTRIBUTION</span>
+                    <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                      {formatNear(circle?.contribution_amount)} NEAR
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono text-slate-400">ROUND DEPOSITS</span>
+                    <div className="text-lg font-bold text-white mt-0.5">
+                      {circle?.deposits_current_round?.length ?? 0} <span className="text-xs text-slate-500">/ {circle?.members?.length ?? 3}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono text-slate-400">TARGET WINNER</span>
+                    <div className="text-sm font-bold text-sky-400 mt-1 truncate">
+                      {currentCandidate || 'Waiting'}
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[10px] text-gray-500 font-mono">{auditLogs.length} events logged</span>
               </div>
 
-              {/* Scrollable Dark Terminal Box */}
-              <div ref={terminalContainerRef} className="flex-1 bg-black/60 rounded-xl p-3.5 font-mono text-xs overflow-y-auto max-h-[340px] space-y-3 border border-gray-900">
-                {auditLogs.length === 0 ? (
-                  <div className="text-gray-600 italic py-8 text-center">Waiting for incoming agent activities...</div>
-                ) : (
-                  auditLogs.map((log, i) => (
-                    <div key={i} className="text-gray-300 border-b border-gray-900/80 pb-2.5 last:border-b-0">
-                      <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
-                        <span>[{log.timestamp.slice(11, 19)}]</span>
-                        <span className="text-emerald-400/80 font-semibold">{log.actionTag}</span>
+              {/* Action Controls & Multi-Chain Intent Trigger (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                {/* Intent Sender Card */}
+                <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <ArrowRightLeft className="h-5 w-5" />
                       </div>
-
-                      <div className="flex items-start gap-1.5 text-sky-300 break-all sm:break-words">
-                        <span className="text-sky-500 font-bold select-none flex-shrink-0">&gt; DO:</span>
-                        <span>{log.actionDesc}</span>
-                      </div>
-
-                      <div className="flex items-start gap-1.5 text-emerald-300 mt-0.5 break-all sm:break-words">
-                        <span className="text-emerald-500 font-bold select-none flex-shrink-0">&gt; SEE:</span>
-                        <span className="text-emerald-400 font-medium">[{log.resultTag}] {log.resultDesc}</span>
+                      <div>
+                        <h3 className="text-base font-bold text-white">Multi-Chain Intent Engine</h3>
+                        <p className="text-[11px] text-slate-400">Simulate cross-chain intent settlement via NEAR 1Click</p>
                       </div>
                     </div>
-                  ))
-                )}
+                  </div>
+
+                  {/* Intent Buttons */}
+                  <div className="flex flex-col gap-2.5">
+                    {/* Alice Intent Button */}
+                    <button
+                      disabled={loading || circle?.deposits_current_round?.includes('alice.near')}
+                      onClick={() => handleDeposit('alice.near', 'base', 'USDC', '5.00')}
+                      className="p-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800/80 border border-blue-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group flex items-center justify-between shadow-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="h-8 w-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm">
+                          🔵
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-blue-400 transition">
+                            Deposit for Alice (Base)
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">5.00 USDC via Base Intent</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                        {circle?.deposits_current_round?.includes('alice.near') ? 'Deposited' : 'Send Intent'}
+                      </span>
+                    </button>
+
+                    {/* Bob Intent Button */}
+                    <button
+                      disabled={loading || circle?.deposits_current_round?.includes('bob.near')}
+                      onClick={() => handleDeposit('bob.near', 'solana', 'SOL', '0.035')}
+                      className="p-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800/80 border border-purple-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group flex items-center justify-between shadow-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="h-8 w-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm">
+                          🟣
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-purple-400 transition">
+                            Deposit for Bob (Solana)
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">0.035 SOL via Solana Intent</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                        {circle?.deposits_current_round?.includes('bob.near') ? 'Deposited' : 'Send Intent'}
+                      </span>
+                    </button>
+
+                    {/* Charlie Intent Button */}
+                    <button
+                      disabled={loading || circle?.deposits_current_round?.includes('charlie.near')}
+                      onClick={() => handleDeposit('charlie.near', 'arbitrum', 'USDC', '5.00')}
+                      className="p-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800/80 border border-sky-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition text-left group flex items-center justify-between shadow-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="h-8 w-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-sm">
+                          🔷
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-sky-400 transition">
+                            Deposit for Charlie (Arbitrum)
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">5.00 USDC via Arbitrum Intent</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                        {circle?.deposits_current_round?.includes('charlie.near') ? 'Deposited' : 'Send Intent'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Rotate Round Button */}
+                  <div className="pt-2">
+                    <button
+                      disabled={loading || !allDeposited || circle?.status !== 'Active'}
+                      onClick={handleRotate}
+                      className={`w-full py-4 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition shadow-xl ${
+                        allDeposited && circle?.status === 'Active'
+                          ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 text-black shadow-emerald-500/30 cursor-pointer animate-pulse'
+                          : 'bg-slate-900 text-slate-500 border border-white/10 cursor-not-allowed'
+                      }`}
+                    >
+                      <Zap className="h-5 w-5" />
+                      <span>
+                        {allDeposited
+                          ? `Trigger Round Rotation (Release Round #${circle?.current_round} Pot)`
+                          : `Awaiting Member Deposits (${circle?.deposits_current_round?.length || 0}/${circle?.members?.length || 3})`}
+                      </span>
+                    </button>
+                    {!allDeposited && (
+                      <p className="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                        Protocol rule: Ledger strictly enforces 100% round funding before release.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick AI Credit Score Sandbox */}
+                <div className="glass-panel rounded-3xl p-5 flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-white">AI Credit Sandbox</h4>
+                    <p className="text-[10px] text-slate-400">Pre-flight reputation check on members</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePreflightGuard('alice.near')}
+                      className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-white/10"
+                    >
+                      Check Alice
+                    </button>
+                    <button
+                      onClick={() => handlePreflightGuard('bob.near')}
+                      className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-white/10"
+                    >
+                      Check Bob
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Turn Order Members Grid */}
+            <div className="glass-panel rounded-3xl p-6 lg:p-8 flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                Syndicate Rotation Schedule & Member Ledger
+              </h3>
+
+              <div className="divide-y divide-white/[0.06] border border-white/[0.08] rounded-2xl overflow-hidden bg-slate-950/40">
+                {circle?.members?.map((member, idx) => {
+                  const turn = idx + 1;
+                  const isPaid = circle.deposits_current_round?.includes(member);
+                  const hasWon = circle.past_winners?.includes(member);
+                  const isCandidate = currentCandidate === member;
+
+                  return (
+                    <div key={member} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 hover:bg-white/[0.02] transition">
+                      <div className="flex items-center gap-3.5">
+                        <span className="flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-xl bg-slate-900 border border-white/10 text-xs font-mono font-bold text-slate-300">
+                          #{turn}
+                        </span>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-sm font-bold text-white">{member}</span>
+                            {isCandidate && (
+                              <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                                ★ Round {circle.current_round} Winner
+                              </span>
+                            )}
+                            {hasWon && (
+                              <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                <Trophy className="h-3 w-3" /> Past Winner
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-500">Scheduled Payout Turn: Round #{turn}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 self-end sm:self-auto">
+                        {isPaid ? (
+                          <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1 rounded-xl font-bold">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Deposited
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs px-3 py-1 rounded-xl font-bold">
+                            <Clock className="h-3.5 w-3.5" /> Pending
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => handlePreflightGuard(member)}
+                          className="text-xs px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 font-mono transition"
+                        >
+                          Audit Risk
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 2: SYNDICATE EXPLORER / MARKETPLACE */}
+        {/* ========================================================================= */}
+        {activeTab === 'explorer' && (
+          <div className="flex flex-col gap-6 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-white">Syndicate Marketplace & Explorer</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Discover yield-backed rotating capital swarms tailored for cross-border teams, DAOs, and AI infrastructure.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-extrabold text-xs flex items-center gap-2 self-start sm:self-auto"
+              >
+                <Plus className="h-4 w-4" /> Deploy New Mesh
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {PRESET_SYNDICATES.map(syndicate => (
+                <div key={syndicate.id} className="glass-panel glass-card-hover rounded-3xl p-6 flex flex-col justify-between gap-5">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-white/10">
+                        {syndicate.category}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">
+                        {syndicate.apy} Target APY
+                      </span>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-white">{syndicate.title}</h3>
+
+                    {/* Supported Chain Badges */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">Chains:</span>
+                      {syndicate.chains.map(c => (
+                        <span key={c} className="text-xs px-2 py-0.5 rounded-md bg-slate-900 border border-white/10 font-mono">
+                          {CHAINS[c]?.icon} {CHAINS[c]?.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-950/60 border border-white/5 text-center">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">TOTAL POT</span>
+                      <span className="text-xs font-bold font-mono text-white">{syndicate.totalCap}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">PER ROUND</span>
+                      <span className="text-xs font-bold font-mono text-emerald-400">{syndicate.contribution}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">RISK TIER</span>
+                      <span className="text-xs font-bold font-mono text-sky-400">{syndicate.riskRating}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <span className="text-xs font-mono text-slate-400">
+                      Capacity: <strong>{syndicate.membersCount} Members</strong>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedCircleId(syndicate.id === 0 ? 0 : 0);
+                        setActiveTab('hub');
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition flex items-center gap-1.5"
+                    >
+                      {syndicate.id === 0 ? 'Enter Live Mesh' : 'Inspect Mesh'}
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 3: AI RISK STUDIO & SPEND GUARD TELEMETRY */}
+        {/* ========================================================================= */}
+        {activeTab === 'risk' && (
+          <div className="flex flex-col gap-6 animate-fadeIn">
+            <div>
+              <h2 className="text-2xl font-black text-white">AI Risk Studio & Spend Guard</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Zero-default architecture. The AI Risk Engine evaluates on-chain Sybil signals and dynamically routes escrow margins.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Radar & Gauge Card (7 cols) */}
+              <div className="lg:col-span-7 glass-panel rounded-3xl p-6 lg:p-8 flex flex-col justify-between gap-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="h-6 w-6 text-emerald-400" />
+                    <div>
+                      <h3 className="text-base font-bold text-white">Autonomous Risk Vector Evaluation</h3>
+                      <p className="text-xs text-slate-400">Real-time credit modeling before round pot dispatch</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    Threshold: 65/100
+                  </span>
+                </div>
+
+                {/* Score Breakdown Bars */}
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs text-slate-300 mb-1">
+                      <span>Historical Cycle Punctuality</span>
+                      <span className="font-mono font-bold text-emerald-400">98 / 100</span>
+                    </div>
+                    <div className="w-full bg-slate-900 rounded-full h-2">
+                      <div className="bg-emerald-400 h-2 rounded-full" style={{ width: '98%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs text-slate-300 mb-1">
+                      <span>Cross-Chain Sybil Probability (Inverse)</span>
+                      <span className="font-mono font-bold text-sky-400">92 / 100</span>
+                    </div>
+                    <div className="w-full bg-slate-900 rounded-full h-2">
+                      <div className="bg-sky-400 h-2 rounded-full" style={{ width: '92%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs text-slate-300 mb-1">
+                      <span>On-Chain Liquidity Resilience</span>
+                      <span className="font-mono font-bold text-purple-400">85 / 100</span>
+                    </div>
+                    <div className="w-full bg-slate-900 rounded-full h-2">
+                      <div className="bg-purple-400 h-2 rounded-full" style={{ width: '85%' }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Policy Decision Banner */}
+                {latestPolicy ? (
+                  <div className={`p-4 rounded-2xl border ${
+                    latestPolicy.policyStatus === 'GUARD_PASSED_FULL_RELEASE'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  }`}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-xs">Evaluated Target: {latestPolicy.winnerAccountId}</span>
+                      <span className="font-mono font-extrabold text-sm">Score: {latestPolicy.trustScore} / 100</span>
+                    </div>
+                    <p className="text-xs text-slate-300">{latestPolicy.reason}</p>
+                    {latestPolicy.escrowWithholdingPercent > 0 && (
+                      <div className="mt-3 pt-2 border-t border-amber-500/30 text-xs font-mono flex justify-between">
+                        <span>Direct Release: 65%</span>
+                        <span>Escrow Locked: 35% in escrow.trustmesh.testnet</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/5 text-center text-xs text-slate-400">
+                    Select a member from the Command Hub to simulate live underwriting.
+                  </div>
+                )}
+              </div>
+
+              {/* Scenario Testing Sandbox (5 cols) */}
+              <div className="lg:col-span-5 glass-panel rounded-3xl p-6 flex flex-col justify-between gap-5">
+                <div>
+                  <h3 className="text-base font-bold text-white">Judge Sandbox: Test Scenarios</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Simulate how TrustMesh defends the pool against malicious actors and defaults:
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => handlePreflightGuard('alice.near')}
+                    className="p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/30 hover:border-emerald-500 text-left transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400">Scenario A: Verified Prime Founder</span>
+                      <span className="text-[10px] font-mono text-emerald-300">Score: 95</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">High reputation member. Passes Spend Guard for 100% immediate release.</p>
+                  </button>
+
+                  <button
+                    onClick={() => handlePreflightGuard('bob.near')}
+                    className="p-3.5 rounded-2xl bg-slate-900 border border-amber-500/30 hover:border-amber-500 text-left transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400">Scenario B: High-Risk New Wallet</span>
+                      <span className="text-[10px] font-mono text-amber-300">Score: 45</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Triggers Spend Guard. Withholds 35% in Escrow Vault to guarantee subsequent rounds.</p>
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-950/80 border border-white/5 text-[11px] text-slate-400">
+                  🛡️ <strong>Zero-Collateral Guarantee:</strong> Rather than demanding 150% over-collateralization like Aave, TrustMesh uses dynamic temporal tranches.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 4: ARCHITECTURE & WHITEPAPER BREAKDOWN */}
+        {/* ========================================================================= */}
+        {activeTab === 'architecture' && (
+          <div className="flex flex-col gap-8 animate-fadeIn">
+            <div className="glass-panel rounded-3xl p-8 max-w-4xl mx-auto flex flex-col gap-6">
+              <div>
+                <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                  Technical Architecture
+                </span>
+                <h2 className="text-3xl font-black text-white mt-1">
+                  How TrustMesh Redefines Decentralized Coordination
+                </h2>
+              </div>
+
+              <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-emerald-400" /> 1. The Multi-Chain Clearinghouse
+                  </h3>
+                  <p>
+                    Rather than forcing users through complex third-party bridges, TrustMesh uses <strong>NEAR Intents</strong>. A participant submits an intent from Base or Solana. Solvers settle the round deposit natively onto the NEAR Ledger contract via an authorized relayer operator.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-teal-400" /> 2. Yield-Generating Idle Liquidity
+                  </h3>
+                  <p>
+                    In traditional informal savings (Ajo/Esusu/Tandas), pooled money sits stagnant. TrustMesh deposits the idle round pot into NEAR DeFi liquidity strategies (Burrow / Ref Finance), generating automated APY shared back to participants.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-sky-400" /> 3. Solving the 100-Year-Old Free-Rider Problem
+                  </h3>
+                  <p>
+                    The vulnerability of rotating savings is default after winning an early round. The <strong>AI Spend Guard</strong> calculates real-time credit telemetry. If counterparty risk is detected, funds are split: immediate liquidity is released, while a risk margin is locked in an escrow sub-account that vests only as future round obligations are satisfied.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 flex justify-end">
+                <button
+                  onClick={() => setActiveTab('hub')}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-black font-extrabold text-xs shadow-lg shadow-emerald-500/20"
+                >
+                  Return to Command Hub
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ---------------- Collapsible Floating Terminal Drawer ---------------- */}
+      <div className="fixed bottom-3 right-3 sm:right-6 z-40 max-w-lg w-[calc(100vw-24px)] sm:w-[480px]">
+        <div className="glass-panel border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
+          {/* Header Bar */}
+          <div
+            onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            className="px-4 py-2.5 bg-slate-900/90 flex items-center justify-between cursor-pointer hover:bg-slate-800/90 transition select-none"
+          >
+            <div className="flex items-center gap-2">
+              <Terminal className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-xs font-mono font-bold text-white">Agent Telemetry CLI</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {auditLogs.length} events
+              </span>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isTerminalOpen ? 'rotate-180' : ''}`} />
+          </div>
+
+          {/* Terminal Body */}
+          {isTerminalOpen && (
+            <div
+              ref={terminalContainerRef}
+              className="bg-black/85 p-3.5 font-mono text-[11px] overflow-y-auto max-h-[220px] space-y-2 border-t border-white/5"
+            >
+              {auditLogs.length === 0 ? (
+                <div className="text-slate-600 italic py-4 text-center">Monitoring live agent intents...</div>
+              ) : (
+                auditLogs.map((log, i) => (
+                  <div key={i} className="text-slate-300 border-b border-white/[0.04] pb-2 last:border-b-0">
+                    <div className="flex items-center justify-between text-[9px] text-slate-500 mb-0.5">
+                      <span>[{log.timestamp.slice(11, 19)}]</span>
+                      <span className="text-emerald-400/80 font-bold">{log.actionTag}</span>
+                    </div>
+                    <div className="text-sky-300 break-all">
+                      <span className="text-sky-500 font-bold">&gt; DO:</span> {log.actionDesc}
+                    </div>
+                    <div className="text-emerald-300 mt-0.5 break-all">
+                      <span className="text-emerald-500 font-bold">&gt; SEE:</span> [{log.resultTag}] {log.resultDesc}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* ---------------- Create Syndicate Modal Wizard ---------------- */}
+      <AnimatePresence>
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-panel border border-white/10 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative"
+            >
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <h3 className="text-xl font-bold text-white mb-1">Deploy New Capital Mesh</h3>
+              <p className="text-xs text-slate-400 mb-5">Configure an autonomous multi-chain savings syndicate on NEAR.</p>
+
+              <form onSubmit={handleCreateSyndicate} className="space-y-4">
+                <div>
+                  <label className="text-xs font-mono text-slate-300 block mb-1">Syndicate Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Developer Compute Swarm"
+                    value={newSyndicate.title}
+                    onChange={e => setNewSyndicate({ ...newSyndicate, title: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-mono text-slate-300 block mb-1">Per-Round Contribution</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={newSyndicate.contribution}
+                      onChange={e => setNewSyndicate({ ...newSyndicate, contribution: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-mono text-slate-300 block mb-1">Rounds / Members</label>
+                    <input
+                      type="number"
+                      required
+                      min="2"
+                      max="20"
+                      value={newSyndicate.totalRounds}
+                      onChange={e => setNewSyndicate({ ...newSyndicate, totalRounds: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-mono text-slate-300 block mb-1">Supported Multi-Chain Ingress</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <span className="p-2 rounded-xl bg-slate-900 border border-blue-500/40 text-[10px] text-blue-300 text-center font-mono font-bold">
+                      🔵 Base
+                    </span>
+                    <span className="p-2 rounded-xl bg-slate-900 border border-purple-500/40 text-[10px] text-purple-300 text-center font-mono font-bold">
+                      🟣 Solana
+                    </span>
+                    <span className="p-2 rounded-xl bg-slate-900 border border-emerald-500/40 text-[10px] text-emerald-300 text-center font-mono font-bold">
+                      🟢 NEAR
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-black font-extrabold text-xs transition shadow-lg shadow-emerald-500/20"
+                  >
+                    Deploy Syndicate to NEAR Ledger
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
