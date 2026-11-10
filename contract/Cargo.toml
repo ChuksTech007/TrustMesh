@@ -2,7 +2,7 @@
 name = "trustmesh-contract"
 version = "0.1.0"
 edition = "2021"
-description = "TrustMesh: Core ledger smart contract for cross-chain agentic Ajo/Esusu rotating savings circles on NEAR Protocol"
+description = "TrustMesh: NEAR retainage desk. A public bond curve prices holdback on a job, and a circle ledger remains as the earlier escrow primitive."
 license = "MIT OR Apache-2.0"
 
 [lib]

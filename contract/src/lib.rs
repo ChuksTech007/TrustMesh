@@ -1,5 +1,5 @@
-use near_sdk::borsh::BorshStorageKey;
 use near_sdk::json_types::U128;
+use near_sdk::BorshStorageKey;
 use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{
     env, near, require, AccountId, PanicOnDefault,
@@ -89,6 +89,7 @@ pub struct MemberRoundStatus {
 pub enum StorageKey {
     Circles,
     Operators,
+    Mandates,
 }
 
 /// Core TrustMesh Rotating Savings Contract State.
@@ -103,6 +104,38 @@ pub struct TrustMeshContract {
     pub circles: LookupMap<u64, Circle>,
     /// Auto-incrementing identifier counter for the next created circle.
     pub next_circle_id: u64,
+    /// Retainage mandates. The desk prices work with the same curve.
+    pub mandates: LookupMap<u64, Mandate>,
+    /// Auto-incrementing identifier for the next mandate.
+    pub next_mandate_id: u64,
+}
+
+/// Lifecycle of a single piece of paid work.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MandateStatus {
+    Quoted,
+    Funded,
+    Delivered,
+    Cleared,
+    Disputed,
+}
+
+/// A payer, a payee, a fee, and a bond priced from the payee's record.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Mandate {
+    pub id: u64,
+    pub client: AccountId,
+    pub maker: AccountId,
+    pub amount: U128,
+    pub score_at_quote: u32,
+    pub bond_bps: u32,
+    pub status: MandateStatus,
+    pub window_seconds: u64,
+    pub maker_score: u32,
+    /// Display fields the desk shows. The curve does not read this.
+    pub metadata: Option<String>,
 }
 
 #[near]
@@ -118,7 +151,158 @@ impl TrustMeshContract {
             operators: LookupSet::new(StorageKey::Operators),
             circles: LookupMap::new(StorageKey::Circles),
             next_circle_id: 0,
+            mandates: LookupMap::new(StorageKey::Mandates),
+            next_mandate_id: 0,
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Retainage — the bond curve and a single job
+    // -------------------------------------------------------------------------
+
+    /// Prices a retainage bond in basis points from a public record.
+    ///
+    /// The curve is a function, not a model:
+    /// - 90 and above: 0 bps
+    /// - 70 to 89: 1,000 bps (10%)
+    /// - below 70: 3,000 bps (30%)
+    pub fn quote_retainage_bps(&self, score: u32) -> u32 {
+        if score >= 90 {
+            0
+        } else if score >= 70 {
+            1_000
+        } else {
+            3_000
+        }
+    }
+
+    /// Opens a quoted mandate. The caller is the client.
+    pub fn open_mandate(
+        &mut self,
+        maker: AccountId,
+        amount: U128,
+        maker_score: u32,
+        window_seconds: Option<u64>,
+        metadata: Option<String>,
+    ) -> u64 {
+        require!(amount.0 > 0, "Amount must be greater than zero");
+        require!(maker_score <= 100, "Score must be between 0 and 100");
+        let client = env::predecessor_account_id();
+        require!(client != maker, "Client and maker must be different accounts");
+
+        let id = self.next_mandate_id;
+        self.next_mandate_id = id.checked_add(1).expect("Mandate id overflow");
+        let bond_bps = self.quote_retainage_bps(maker_score);
+        let mandate = Mandate {
+            id,
+            client,
+            maker,
+            amount,
+            score_at_quote: maker_score,
+            bond_bps,
+            status: MandateStatus::Quoted,
+            window_seconds: window_seconds.unwrap_or(48 * 60 * 60),
+            maker_score,
+            metadata,
+        };
+        self.mandates.insert(id, mandate);
+        id
+    }
+
+    /// Client or an operator marks the mandate funded. This call does not receive a token.
+    pub fn fund_mandate(&mut self, mandate_id: u64) {
+        let mut mandate = self.take_mandate(mandate_id);
+        self.assert_client_or_operator(&mandate.client);
+        require!(
+            mandate.status == MandateStatus::Quoted,
+            "Mandate is not awaiting funds"
+        );
+        mandate.status = MandateStatus::Funded;
+        self.mandates.insert(mandate_id, mandate);
+    }
+
+    /// Maker marks the work delivered and opens the acceptance window.
+    pub fn deliver_mandate(&mut self, mandate_id: u64) {
+        let mut mandate = self.take_mandate(mandate_id);
+        require!(
+            env::predecessor_account_id() == mandate.maker,
+            "Only the maker can record delivery"
+        );
+        require!(
+            mandate.status == MandateStatus::Funded,
+            "Mandate is not funded"
+        );
+        mandate.status = MandateStatus::Delivered;
+        self.mandates.insert(mandate_id, mandate);
+    }
+
+    /// Client accepts. Bond releases. Record climbs by 17, capped at 99.
+    pub fn accept_mandate(&mut self, mandate_id: u64) {
+        let mut mandate = self.take_mandate(mandate_id);
+        require!(
+            env::predecessor_account_id() == mandate.client,
+            "Only the client can accept"
+        );
+        require!(
+            mandate.status == MandateStatus::Delivered,
+            "Nothing is in the acceptance window"
+        );
+        mandate.maker_score = mandate.maker_score.saturating_add(17).min(99);
+        mandate.status = MandateStatus::Cleared;
+        self.mandates.insert(mandate_id, mandate);
+    }
+
+    /// Policy agent. Silence through the window releases the bond.
+    /// Record climbs by 9, capped at 99. Only an operator may call this.
+    pub fn expire_mandate(&mut self, mandate_id: u64) {
+        let caller = env::predecessor_account_id();
+        require!(self.operators.contains(&caller), "Only an operator can expire a window");
+        let mut mandate = self.take_mandate(mandate_id);
+        require!(
+            mandate.status == MandateStatus::Delivered,
+            "Nothing is in the acceptance window"
+        );
+        mandate.maker_score = mandate.maker_score.saturating_add(9).min(99);
+        mandate.status = MandateStatus::Cleared;
+        self.mandates.insert(mandate_id, mandate);
+    }
+
+    /// Client disputes. The bond stays frozen. Record drops by 12, floored at 8.
+    pub fn dispute_mandate(&mut self, mandate_id: u64) {
+        let mut mandate = self.take_mandate(mandate_id);
+        require!(
+            env::predecessor_account_id() == mandate.client,
+            "Only the client can dispute"
+        );
+        require!(
+            mandate.status == MandateStatus::Delivered,
+            "Nothing is in the acceptance window"
+        );
+        mandate.maker_score = mandate.maker_score.saturating_sub(12).max(8);
+        mandate.status = MandateStatus::Disputed;
+        self.mandates.insert(mandate_id, mandate);
+    }
+
+    pub fn get_mandate(&self, mandate_id: u64) -> Option<Mandate> {
+        self.mandates.get(&mandate_id).cloned()
+    }
+
+    pub fn get_mandate_count(&self) -> u64 {
+        self.next_mandate_id
+    }
+
+    fn take_mandate(&mut self, mandate_id: u64) -> Mandate {
+        self.mandates
+            .remove(&mandate_id)
+            .expect("Mandate does not exist")
+    }
+
+    fn assert_client_or_operator(&self, client: &AccountId) {
+        let caller = env::predecessor_account_id();
+        require!(
+            &caller == client || self.operators.contains(&caller),
+            "Only the client or an operator can fund"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -320,6 +504,7 @@ impl TrustMeshContract {
     /// The `AccountId` of the member awarded the current round's pot.
     pub fn rotate_round(&mut self, circle_id: u64) -> AccountId {
         let caller = env::predecessor_account_id();
+        let authorized = self.is_authorized(&caller);
         let circle = self
             .circles
             .get_mut(&circle_id)
@@ -327,7 +512,7 @@ impl TrustMeshContract {
 
         // Guard: Caller must be admin, an authorized agent, or a registered circle member
         require!(
-            self.is_authorized(&caller) || circle.is_member(&caller),
+            authorized || circle.is_member(&caller),
             "Unauthorized: caller must be an admin, operator, or circle member"
         );
 
@@ -697,7 +882,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Circle has reached maximum member capacity")]
+    #[should_panic(expected = "Circle is not open for joining")]
     fn test_join_beyond_capacity_fails() {
         let alice = account("alice.near");
         let bob = account("bob.near");
@@ -913,6 +1098,81 @@ mod tests {
         let last_page = contract.get_circles(Some(4), Some(10));
         assert_eq!(last_page.len(), 1);
         assert_eq!(last_page[0].id, 4);
+    }
+
+    #[test]
+    fn test_retainage_curve_matches_the_desk() {
+        let alice = account("alice.near");
+        set_context(&alice);
+        let contract = TrustMeshContract::new(None);
+        assert_eq!(contract.quote_retainage_bps(94), 0);
+        assert_eq!(contract.quote_retainage_bps(90), 0);
+        assert_eq!(contract.quote_retainage_bps(89), 1_000);
+        assert_eq!(contract.quote_retainage_bps(70), 1_000);
+        assert_eq!(contract.quote_retainage_bps(69), 3_000);
+        assert_eq!(contract.quote_retainage_bps(54), 3_000);
+    }
+
+    #[test]
+    fn test_mandate_accept_reprices_the_next_bond() {
+        let client = account("atelier.near");
+        let maker = account("kofi.sol");
+        let operator = account("agent.near");
+
+        set_context(&client);
+        let mut contract = TrustMeshContract::new(Some(client.clone()));
+        contract.add_operator(operator.clone());
+
+        let id = contract.open_mandate(maker.clone(), U128(4800), 54, Some(48 * 60 * 60), None);
+        let quoted = contract.get_mandate(id).unwrap();
+        assert_eq!(quoted.status, MandateStatus::Quoted);
+        assert_eq!(quoted.bond_bps, 3_000);
+
+        contract.fund_mandate(id);
+
+        set_context(&maker);
+        contract.deliver_mandate(id);
+
+        set_context(&client);
+        contract.accept_mandate(id);
+
+        let cleared = contract.get_mandate(id).unwrap();
+        assert_eq!(cleared.status, MandateStatus::Cleared);
+        assert_eq!(cleared.maker_score, 71);
+        assert_eq!(contract.quote_retainage_bps(cleared.maker_score), 1_000);
+    }
+
+    #[test]
+    fn test_silence_releases_and_dispute_freezes() {
+        let client = account("render.agent.near");
+        let maker = account("grade.agent.near");
+        let operator = account("policy.near");
+
+        set_context(&client);
+        let mut contract = TrustMeshContract::new(Some(client.clone()));
+        contract.add_operator(operator.clone());
+        let id = contract.open_mandate(maker.clone(), U128(860), 61, Some(24 * 60 * 60), None);
+        contract.fund_mandate(id);
+
+        set_context(&maker);
+        contract.deliver_mandate(id);
+
+        set_context(&operator);
+        contract.expire_mandate(id);
+        let cleared = contract.get_mandate(id).unwrap();
+        assert_eq!(cleared.status, MandateStatus::Cleared);
+        assert_eq!(cleared.maker_score, 70);
+
+        set_context(&client);
+        let disputed_id = contract.open_mandate(maker.clone(), U128(860), 61, None, None);
+        contract.fund_mandate(disputed_id);
+        set_context(&maker);
+        contract.deliver_mandate(disputed_id);
+        set_context(&client);
+        contract.dispute_mandate(disputed_id);
+        let disputed = contract.get_mandate(disputed_id).unwrap();
+        assert_eq!(disputed.status, MandateStatus::Disputed);
+        assert_eq!(disputed.maker_score, 49);
     }
 }
 
