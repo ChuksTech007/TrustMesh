@@ -23,11 +23,11 @@ const wasm = fs.readFileSync(wasmPath);
 const outcome = await account.deployContract(wasm);
 console.log(`deployed ${wasm.length} bytes, tx ${outcome.transaction.hash}`);
 
-await account.functionCall({
+const migrated = await account.functionCall({
   contractId: config.contractId,
-  methodName: "new",
-  args: { admin: config.clientId },
+  methodName: "migrate",
+  args: {},
   gas: GAS,
   attachedDeposit: 0n,
 });
-console.log(`initialized, admin ${config.clientId}`);
+console.log(`migrated ${migrated.transaction.hash}; existing mandates kept, escrow map added`);

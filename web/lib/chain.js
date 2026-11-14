@@ -1,5 +1,5 @@
 import { connect, keyStores, KeyPair } from "near-api-js";
-import { splitAmount } from "./policy";
+import { bondBps, bondPercent, splitAmount, splitYocto } from "./policy";
 
 const GAS = 50000000000000n;
 
@@ -19,7 +19,7 @@ export function chainConfig() {
     policyId: process.env.NEAR_POLICY_ID || "",
     policyKey: process.env.NEAR_POLICY_KEY || "",
   };
-  config.configured = Boolean(config.contractId && config.clientId && config.clientKey);
+  config.configured = Boolean(config.contractId);
   return config;
 }
 
@@ -46,14 +46,49 @@ async function nearFor(config, role) {
   return { near, account, signer };
 }
 
-async function view(config, methodName, args, account) {
-  const signer = account || (await nearFor(config, "client")).account;
-  const run = () =>
-    signer.viewFunction({
-      contractId: config.contractId,
-      methodName,
-      args,
+function asNumber(value) {
+  if (value == null) return 0;
+  if (typeof value === "object" && value !== null && "toString" in value) {
+    return Number(value.toString());
+  }
+  return Number(value);
+}
+
+function asString(value) {
+  if (value == null) return "0";
+  return String(value);
+}
+
+async function rpcView(config, methodName, args) {
+  const body = {
+    jsonrpc: "2.0",
+    id: "trustmesh",
+    method: "query",
+    params: {
+      request_type: "call_function",
+      finality: "final",
+      account_id: config.contractId,
+      method_name: methodName,
+      args_base64: Buffer.from(JSON.stringify(args ?? {})).toString("base64"),
+    },
+  };
+  const run = async () => {
+    const res = await fetch(config.nodeUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
     });
+    const data = await res.json();
+    if (data.error) {
+      const detail = data.error.data || data.error.message || "The contract view failed.";
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    const bytes = data.result?.result;
+    if (!bytes) return null;
+    const text = Buffer.from(bytes).toString("utf8");
+    if (!text) return null;
+    return JSON.parse(text);
+  };
   try {
     return await run();
   } catch (error) {
@@ -63,15 +98,7 @@ async function view(config, methodName, args, account) {
   }
 }
 
-function asNumber(value) {
-  if (value == null) return 0;
-  if (typeof value === "object" && value !== null && "toString" in value) {
-    return Number(value.toString());
-  }
-  return Number(value);
-}
-
-function mapMandate(raw) {
+function mapMandate(raw, escrowYocto) {
   let meta = {};
   if (raw?.metadata) {
     try {
@@ -80,23 +107,47 @@ function mapMandate(raw) {
       meta = {};
     }
   }
-  const amount = asNumber(raw.amount);
+  const amountStr = asString(raw.amount);
+  const yocto = meta.unit === "yocto" || amountStr.length > 15;
   const score = asNumber(raw.maker_score);
   const bps = asNumber(raw.bond_bps);
   const pct = bps / 100;
-  const bond = Math.round(amount * pct) / 100;
-  const release = Math.round((amount - bond) * 100) / 100;
   const status = String(raw.status || "").replace(/"/g, "").toLowerCase();
+  let amountUsd = null;
+  let quote;
+  let nextQuote;
+  if (yocto) {
+    const parts = splitYocto(amountStr, bps);
+    const next = splitYocto(amountStr, bondBps(score));
+    quote = { pct, bond: parts.bond.toString(), release: parts.release.toString() };
+    nextQuote = {
+      pct: bondPercent(score),
+      bond: next.bond.toString(),
+      release: next.release.toString(),
+    };
+  } else {
+    const amount = Number(amountStr);
+    amountUsd = Number.isFinite(amount) ? amount : 0;
+    const bond = Math.round(amountUsd * pct) / 100;
+    const release = Math.round((amountUsd - bond) * 100) / 100;
+    quote = { pct, bond, release };
+    nextQuote = splitAmount(amountUsd, score);
+  }
   return {
     id: String(raw.id),
     onChainId: asNumber(raw.id),
     title: meta.title || `Mandate ${raw.id}`,
     brief: meta.brief || "",
-    amountUsd: amount,
+    yocto,
+    amountYocto: yocto ? amountStr : null,
+    amountUsd,
+    escrowYocto: asString(escrowYocto || "0"),
+    metadata: raw.metadata || null,
+    windowSeconds: asNumber(raw.window_seconds),
     windowHours: Math.round(asNumber(raw.window_seconds) / 3600),
     status,
-    quote: { pct, bond, release },
-    nextQuote: splitAmount(amount, score),
+    quote,
+    nextQuote,
     client: {
       name: meta.clientName || raw.client,
       place: meta.clientPlace || "Testnet",
@@ -158,18 +209,25 @@ export async function readDesk() {
     return {
       configured: false,
       reason:
-        "Set NEAR_CONTRACT_ID, NEAR_CLIENT_ID, and NEAR_CLIENT_KEY in web/.env.local. The desk does not simulate a settlement.",
+        "Set NEAR_CONTRACT_ID in web/.env.local. The desk does not simulate a settlement.",
       networkId: config.networkId,
       jobs: [],
       policyKey: null,
     };
   }
-  const { account } = await nearFor(config, "client");
-  const count = asNumber(await view(config, "get_mandate_count", {}, account));
+  const count = asNumber(await rpcView(config, "get_mandate_count", {}));
   const jobs = [];
   for (let id = 0; id < count; id += 1) {
-    const raw = await view(config, "get_mandate", { mandate_id: id }, account);
-    if (raw) jobs.push(mapMandate(raw));
+    const raw = await rpcView(config, "get_mandate", { mandate_id: id });
+    if (!raw) continue;
+    let escrow = "0";
+    try {
+      escrow = asString(await rpcView(config, "get_escrow", { mandate_id: id }));
+    } catch (error) {
+      const message = String(error?.message || error);
+      if (!/method not found|unknown method|MethodNotFound/i.test(message)) throw error;
+    }
+    jobs.push(mapMandate(raw, escrow));
   }
   let policyKey = null;
   try {
@@ -182,6 +240,8 @@ export async function readDesk() {
     networkId: config.networkId,
     contractId: config.contractId,
     contractUrl: explorerAccount(config.networkId, config.contractId),
+    clientId: config.clientId,
+    makerId: config.makerId,
     jobs,
     policyKey,
   };
@@ -195,7 +255,16 @@ const CALLS = {
   expire: { method: "expire_mandate", role: "policy" },
 };
 
+const WALLET_ONLY = new Set(["fund", "deliver", "accept", "dispute", "open_next"]);
+
 export async function actOnChain(mandateId, action) {
+  if (WALLET_ONLY.has(action)) {
+    const error = new Error(
+      "Sign this step in a testnet wallet. The server only signs expire_mandate."
+    );
+    error.status = 400;
+    throw error;
+  }
   const config = chainConfig();
   if (!config.configured) {
     const error = new Error("The contract is not configured.");
@@ -209,34 +278,14 @@ export async function actOnChain(mandateId, action) {
     throw error;
   }
 
-  let method;
-  let role;
-  let args;
-  if (action === "open_next") {
-    const current = await view(config, "get_mandate", { mandate_id: id });
-    if (!current) {
-      const error = new Error("Mandate does not exist.");
-      error.status = 404;
-      throw error;
-    }
-    method = "open_mandate";
-    role = "client";
-    args = {
-      maker: current.maker,
-      amount: String(asNumber(current.amount)),
-      maker_score: asNumber(current.maker_score),
-      window_seconds: asNumber(current.window_seconds),
-      metadata: current.metadata || null,
-    };
-  } else if (CALLS[action]) {
-    method = CALLS[action].method;
-    role = CALLS[action].role;
-    args = { mandate_id: id };
-  } else {
+  if (!CALLS[action] || CALLS[action].role !== "policy") {
     const error = new Error("Unknown action.");
     error.status = 400;
     throw error;
   }
+  const method = CALLS[action].method;
+  const role = CALLS[action].role;
+  const args = { mandate_id: id };
 
   const { account } = await nearFor(config, role);
   const outcome = await account.functionCall({

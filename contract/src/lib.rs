@@ -1,8 +1,8 @@
+use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
-use near_sdk::BorshStorageKey;
 use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{
-    env, near, require, AccountId, PanicOnDefault,
+    env, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, Promise,
 };
 
 /// Status of an Ajo / Esusu savings circle.
@@ -90,6 +90,7 @@ pub enum StorageKey {
     Circles,
     Operators,
     Mandates,
+    Escrow,
 }
 
 /// Core TrustMesh Rotating Savings Contract State.
@@ -108,6 +109,19 @@ pub struct TrustMeshContract {
     pub mandates: LookupMap<u64, Mandate>,
     /// Auto-incrementing identifier for the next mandate.
     pub next_mandate_id: u64,
+    /// Testnet NEAR still held for a mandate, in yoctoNEAR.
+    pub escrow: LookupMap<u64, u128>,
+}
+
+/// State layout from before escrow. `migrate` reads this once.
+#[derive(BorshDeserialize, BorshSerialize)]
+struct TrustMeshContractV1 {
+    admin: AccountId,
+    operators: LookupSet<AccountId>,
+    circles: LookupMap<u64, Circle>,
+    next_circle_id: u64,
+    mandates: LookupMap<u64, Mandate>,
+    next_mandate_id: u64,
 }
 
 /// Lifecycle of a single piece of paid work.
@@ -153,6 +167,28 @@ impl TrustMeshContract {
             next_circle_id: 0,
             mandates: LookupMap::new(StorageKey::Mandates),
             next_mandate_id: 0,
+            escrow: LookupMap::new(StorageKey::Escrow),
+        }
+    }
+
+    /// Adds the escrow map without touching existing mandates.
+    /// A second call reads the current layout and leaves escrow in place.
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let bytes = env::storage_read(b"STATE").expect("No contract state to migrate");
+        if let Ok(current) = TrustMeshContract::try_from_slice(&bytes) {
+            return current;
+        }
+        let old = TrustMeshContractV1::try_from_slice(&bytes)
+            .expect("Cannot deserialize the contract state");
+        Self {
+            admin: old.admin,
+            operators: old.operators,
+            circles: old.circles,
+            next_circle_id: old.next_circle_id,
+            mandates: old.mandates,
+            next_mandate_id: old.next_mandate_id,
+            escrow: LookupMap::new(StorageKey::Escrow),
         }
     }
 
@@ -209,7 +245,8 @@ impl TrustMeshContract {
         id
     }
 
-    /// Client or an operator marks the mandate funded. This call does not receive a token.
+    /// Client or an operator locks the fee. The attached deposit must equal `amount` in yoctoNEAR.
+    #[payable]
     pub fn fund_mandate(&mut self, mandate_id: u64) {
         let mut mandate = self.take_mandate(mandate_id);
         self.assert_client_or_operator(&mandate.client);
@@ -217,8 +254,14 @@ impl TrustMeshContract {
             mandate.status == MandateStatus::Quoted,
             "Mandate is not awaiting funds"
         );
+        let deposit = env::attached_deposit().as_yoctonear();
+        require!(
+            deposit == mandate.amount.0,
+            "Attach the mandate amount in yoctoNEAR"
+        );
         mandate.status = MandateStatus::Funded;
         self.mandates.insert(mandate_id, mandate);
+        self.escrow.insert(mandate_id, deposit);
     }
 
     /// Maker marks the work delivered and opens the acceptance window.
@@ -232,6 +275,15 @@ impl TrustMeshContract {
             mandate.status == MandateStatus::Funded,
             "Mandate is not funded"
         );
+        let held = self.escrow.get(&mandate_id).copied().unwrap_or(0);
+        require!(held == mandate.amount.0, "Escrow does not match the mandate");
+        let (bond, release) = split_bond(held, mandate.bond_bps);
+        pay(&mandate.maker, release);
+        if bond == 0 {
+            self.escrow.remove(&mandate_id);
+        } else {
+            self.escrow.insert(mandate_id, bond);
+        }
         mandate.status = MandateStatus::Delivered;
         self.mandates.insert(mandate_id, mandate);
     }
@@ -247,6 +299,8 @@ impl TrustMeshContract {
             mandate.status == MandateStatus::Delivered,
             "Nothing is in the acceptance window"
         );
+        let held = self.escrow.remove(&mandate_id).unwrap_or(0);
+        pay(&mandate.maker, held);
         mandate.maker_score = mandate.maker_score.saturating_add(17).min(99);
         mandate.status = MandateStatus::Cleared;
         self.mandates.insert(mandate_id, mandate);
@@ -262,6 +316,8 @@ impl TrustMeshContract {
             mandate.status == MandateStatus::Delivered,
             "Nothing is in the acceptance window"
         );
+        let held = self.escrow.remove(&mandate_id).unwrap_or(0);
+        pay(&mandate.maker, held);
         mandate.maker_score = mandate.maker_score.saturating_add(9).min(99);
         mandate.status = MandateStatus::Cleared;
         self.mandates.insert(mandate_id, mandate);
@@ -289,6 +345,11 @@ impl TrustMeshContract {
 
     pub fn get_mandate_count(&self) -> u64 {
         self.next_mandate_id
+    }
+
+    /// NEAR still held for this mandate, in yoctoNEAR. Zero when nothing is locked.
+    pub fn get_escrow(&self, mandate_id: u64) -> U128 {
+        U128(self.escrow.get(&mandate_id).copied().unwrap_or(0))
     }
 
     fn take_mandate(&mut self, mandate_id: u64) -> Mandate {
@@ -730,6 +791,20 @@ impl TrustMeshContract {
     }
 }
 
+fn split_bond(amount: u128, bps: u32) -> (u128, u128) {
+    let bond = amount.saturating_mul(u128::from(bps)) / 10_000;
+    (bond, amount - bond)
+}
+
+fn pay(to: &AccountId, amount: u128) {
+    if amount == 0 {
+        return;
+    }
+    Promise::new(to.clone())
+        .transfer(NearToken::from_yoctonear(amount))
+        .detach();
+}
+
 // -----------------------------------------------------------------------------
 // Comprehensive Unit Tests (Machine-Readable Test Harness)
 // -----------------------------------------------------------------------------
@@ -744,11 +819,37 @@ mod tests {
     }
 
     fn set_context(caller: &AccountId) {
+        set_context_deposit(caller, 0);
+    }
+
+    fn set_context_deposit(caller: &AccountId, deposit: u128) {
         let context = VMContextBuilder::new()
             .predecessor_account_id(caller.clone())
             .signer_account_id(caller.clone())
+            .current_account_id(account("contract.near"))
+            .account_balance(NearToken::from_near(10_000))
+            .attached_deposit(NearToken::from_yoctonear(deposit))
             .build();
         testing_env!(context);
+    }
+
+    /// Fund with a deposit equal to the mandate amount. The amount is yoctoNEAR in these tests.
+    fn fund(contract: &mut TrustMeshContract, caller: &AccountId, id: u64, amount: u128) {
+        set_context_deposit(caller, amount);
+        contract.fund_mandate(id);
+    }
+
+    fn transfers_to(receiver: &AccountId) -> Vec<u128> {
+        use near_sdk::mock::MockAction;
+        near_sdk::test_utils::get_created_receipts()
+            .into_iter()
+            .filter(|receipt| &receipt.receiver_id == receiver)
+            .flat_map(|receipt| receipt.actions)
+            .filter_map(|action| match action {
+                MockAction::Transfer { deposit, .. } => Some(deposit.as_yoctonear()),
+                _ => None,
+            })
+            .collect()
     }
 
     #[test]
@@ -1128,13 +1229,18 @@ mod tests {
         assert_eq!(quoted.status, MandateStatus::Quoted);
         assert_eq!(quoted.bond_bps, 3_000);
 
-        contract.fund_mandate(id);
+        fund(&mut contract, &client, id, 4800);
+        assert_eq!(contract.get_escrow(id).0, 4800);
 
         set_context(&maker);
         contract.deliver_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 1440);
+        assert_eq!(transfers_to(&maker), vec![3360]);
 
         set_context(&client);
         contract.accept_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 0);
+        assert_eq!(transfers_to(&maker), vec![1440]);
 
         let cleared = contract.get_mandate(id).unwrap();
         assert_eq!(cleared.status, MandateStatus::Cleared);
@@ -1152,20 +1258,24 @@ mod tests {
         let mut contract = TrustMeshContract::new(Some(client.clone()));
         contract.add_operator(operator.clone());
         let id = contract.open_mandate(maker.clone(), U128(860), 61, Some(24 * 60 * 60), None);
-        contract.fund_mandate(id);
+        fund(&mut contract, &client, id, 860);
 
         set_context(&maker);
         contract.deliver_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 258);
+        assert_eq!(transfers_to(&maker), vec![602]);
 
         set_context(&operator);
         contract.expire_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 0);
+        assert_eq!(transfers_to(&maker), vec![258]);
         let cleared = contract.get_mandate(id).unwrap();
         assert_eq!(cleared.status, MandateStatus::Cleared);
         assert_eq!(cleared.maker_score, 70);
 
         set_context(&client);
         let disputed_id = contract.open_mandate(maker.clone(), U128(860), 61, None, None);
-        contract.fund_mandate(disputed_id);
+        fund(&mut contract, &client, disputed_id, 860);
         set_context(&maker);
         contract.deliver_mandate(disputed_id);
         set_context(&client);
@@ -1173,6 +1283,70 @@ mod tests {
         let disputed = contract.get_mandate(disputed_id).unwrap();
         assert_eq!(disputed.status, MandateStatus::Disputed);
         assert_eq!(disputed.maker_score, 49);
+        assert_eq!(contract.get_escrow(disputed_id).0, 258);
+        assert!(transfers_to(&maker).is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "Attach the mandate amount in yoctoNEAR")]
+    fn test_fund_rejects_wrong_deposit() {
+        let client = account("atelier.near");
+        let maker = account("kofi.near");
+        set_context(&client);
+        let mut contract = TrustMeshContract::new(Some(client.clone()));
+        let amount = 2_000_000_000_000_000_000_000_000u128;
+        let id = contract.open_mandate(maker, U128(amount), 54, None, None);
+        fund(&mut contract, &client, id, 1);
+    }
+
+    #[test]
+    fn test_zero_bond_pays_the_whole_fee_on_delivery() {
+        let client = account("client.near");
+        let maker = account("maker.near");
+        set_context(&client);
+        let mut contract = TrustMeshContract::new(Some(client.clone()));
+        let amount = 10_000u128;
+        let id = contract.open_mandate(maker.clone(), U128(amount), 94, None, None);
+        fund(&mut contract, &client, id, amount);
+
+        set_context(&maker);
+        contract.deliver_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 0);
+        assert_eq!(transfers_to(&maker), vec![amount]);
+
+        set_context(&client);
+        contract.accept_mandate(id);
+        assert_eq!(contract.get_escrow(id).0, 0);
+        assert!(transfers_to(&maker).is_empty());
+    }
+
+    #[test]
+    fn test_migrate_adds_escrow_and_a_second_call_keeps_it() {
+        let client = account("atelier.near");
+        set_context(&client);
+        let old = TrustMeshContractV1 {
+            admin: client.clone(),
+            operators: LookupSet::new(StorageKey::Operators),
+            circles: LookupMap::new(StorageKey::Circles),
+            next_circle_id: 0,
+            mandates: LookupMap::new(StorageKey::Mandates),
+            next_mandate_id: 1,
+        };
+        let bytes = near_sdk::borsh::to_vec(&old).unwrap();
+        env::storage_write(b"STATE", &bytes);
+
+        let mut migrated = TrustMeshContract::migrate();
+        assert_eq!(migrated.get_admin(), client);
+        assert_eq!(migrated.get_mandate_count(), 1);
+        assert_eq!(migrated.get_escrow(0).0, 0);
+        migrated.escrow.insert(7, 42);
+        migrated.escrow.flush();
+        let current = near_sdk::borsh::to_vec(&migrated).unwrap();
+        env::storage_write(b"STATE", &current);
+
+        let again = TrustMeshContract::migrate();
+        assert_eq!(again.get_escrow(7).0, 42);
+        assert_eq!(again.get_mandate_count(), 1);
     }
 }
 

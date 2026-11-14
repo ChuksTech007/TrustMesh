@@ -84,10 +84,10 @@ export default function HomePage() {
               className="mt-8 max-w-xl text-lg leading-relaxed text-ink-soft"
             >
               TrustMesh prices a retainage from the payee&apos;s record and stores the
-              mandate on a NEAR testnet contract. The release leg is a dry quote from
-              NEAR Intents: Base USDC in, Solana USDC out, no funds moved. When the
-              window goes quiet, the release is signed by a key that can call only
-              expire_mandate.
+              mandate on a NEAR testnet contract. A new job locks faucet NEAR. Delivery
+              sends the unbonded slice to the maker in NEAR. The Intents line is a dry
+              USDC price, Base in and Solana out, and it does not move USDC. When the
+              window goes quiet, a key that can call only expire_mandate pays the bond.
             </motion.p>
             <motion.div
               variants={fade}
@@ -100,7 +100,7 @@ export default function HomePage() {
                 href="/desk"
                 className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm text-paper"
               >
-                Run the $4,800 docket
+                Open the desk
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
               <a href="#curve" className="text-sm text-ink-soft underline decoration-line underline-offset-4">
@@ -127,10 +127,10 @@ export default function HomePage() {
               className="absolute -left-3 bottom-6 w-[88%] rounded-sm border border-line bg-paper p-4 shadow-docket sm:-left-10"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-ink-soft">Docket TM-1842</p>
-                <p className="font-serif text-xl">$4,800</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-ink-soft">New mandate</p>
+                <p className="font-serif text-xl">2 NEAR</p>
               </div>
-              <p className="mt-2 text-sm">Kofi Mensah · record 54</p>
+              <p className="mt-2 text-sm">Faucet retainage · record 54</p>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-paper-2">
                 <motion.div
                   className="h-full bg-copper"
@@ -140,8 +140,8 @@ export default function HomePage() {
                 />
               </div>
               <div className="mt-2 flex justify-between text-xs text-ink-soft">
-                <span>$3,360 releases on delivery</span>
-                <span>$1,440 bonded 48h</span>
+                <span>1.4 NEAR leaves on delivery</span>
+                <span>0.6 NEAR bonded 48h</span>
               </div>
             </motion.aside>
           </motion.div>
@@ -214,7 +214,9 @@ export default function HomePage() {
                   This is not a model. Ninety and above, nothing is held. Seventy to
                   eighty-nine, ten percent. Below seventy, thirty percent. The same
                   function is <span className="text-ink">quote_retainage_bps</span> on
-                  the NEAR contract. The key that expires a window cannot change it.
+                  the NEAR contract. The dollars here are the illustration. The contract
+                  pays the same percents in faucet NEAR. The key that expires a window
+                  cannot change the curve.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-2">
                   {PRESETS.map((p) => (
@@ -264,7 +266,7 @@ export default function HomePage() {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-ink-soft">Releases on delivery</p>
+                    <p className="text-ink-soft">Unbonded slice</p>
                     <p className="mt-1 font-serif text-3xl">{usd(quote.release)}</p>
                   </div>
                   <div>
@@ -283,13 +285,13 @@ export default function HomePage() {
 
         <section id="settle" className="mx-auto max-w-3xl px-5 pb-20">
           <p className="text-[11px] uppercase tracking-[0.2em] text-copper">How a job settles</p>
-          <h2 className="mt-3 font-serif text-4xl tracking-tight">Six moves. Then the money is done.</h2>
+          <h2 className="mt-3 font-serif text-4xl tracking-tight">Six moves. The fee is testnet NEAR.</h2>
           <ol className="mt-10">
             {[
               ["01", "Quote", "The desk reads the payee's record and prints the bond before anyone sends a coin."],
               ["02", "Price", "The desk asks NEAR Intents for a dry quote from Base USDC to Solana USDC. The response carries a correlation id. It does not move funds."],
               ["03", "Deliver", "The maker marks the work in. The acceptance window starts. People set how long it is."],
-              ["04", "Split", "The unbonded slice can leave at once, on the chain the maker asked for."],
+              ["04", "Split", "On delivery, the contract sends the unbonded slice to the maker in testnet NEAR. The bond stays until accept, or until the policy key expires the window."],
               ["05", "Window", "The client key accepts or disputes. Silence is signed by the function-call key, whose method list is expire_mandate and nothing else."],
               ["06", "Record", "A clear job writes the new score. The next bond is cheaper. A dispute freezes this one and prices the next higher."],
             ].map(([n, title, body], i) => (

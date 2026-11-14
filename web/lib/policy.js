@@ -24,6 +24,13 @@ export function splitAmount(amountUsd, score) {
   return { pct, bond, release };
 }
 
+/** Integer split of a yoctoNEAR amount. Matches `split_bond` in the contract. */
+export function splitYocto(amountYocto, bps) {
+  const amount = BigInt(amountYocto);
+  const bond = (amount * BigInt(bps)) / 10000n;
+  return { bond, release: amount - bond };
+}
+
 export const CURVE = [
   { label: "Prime", from: 90, to: 100, pct: 0 },
   { label: "Proven", from: 70, to: 89, pct: 10 },
